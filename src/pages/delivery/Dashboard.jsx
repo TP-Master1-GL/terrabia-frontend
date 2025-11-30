@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+// pages/delivery/Dashboard.jsx
+import React, { useState, useEffect } from 'react'
 import {
   Container,
   Typography,
@@ -13,9 +14,9 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Divider,
   Tabs,
-  Tab
+  Tab,
+  Alert
 } from '@mui/material'
 import {
   LocalShipping,
@@ -27,81 +28,80 @@ import {
   History
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
+import { authAPI } from '../../services/api'
 
 const DeliveryDashboard = () => {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState(0)
-  const [deliveries, setDeliveries] = useState([
-    {
-      id: 1,
-      order_id: 1001,
-      customer: 'Client Test',
-      address: 'Yaoundé, Cameroun - Rue 1.234',
-      phone: '+237 6 54 32 10 97',
-      status: 'pending',
-      created_at: '2024-01-20 10:00',
-      items: ['Tomates (2kg)', 'Oignons (1kg)'],
-      total: 8500,
-      farmer: 'Agriculteur Test'
-    },
-    {
-      id: 2,
-      order_id: 1002,
-      customer: 'Marie Lambert',
-      address: 'Douala, Cameroun - Avenue 5.678',
-      phone: '+237 6 54 32 10 96',
-      status: 'accepted',
-      created_at: '2024-01-20 09:30',
-      items: ['Bananes (3kg)'],
-      total: 2400,
-      farmer: 'Jean Dupont'
-    },
-    {
-      id: 3,
-      order_id: 1003,
-      customer: 'Pierre Ngo',
-      address: 'Yaoundé, Cameroun - Boulevard 9.101',
-      phone: '+237 6 54 32 10 95',
-      status: 'completed',
-      created_at: '2024-01-19 14:20',
-      items: ['Carottes (1kg)', 'Piments (0.5kg)'],
-      total: 2100,
-      farmer: 'Alice Mbarga'
+  const [deliveries, setDeliveries] = useState([])
+  const [stats, setStats] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadDeliveries()
+    loadStats()
+  }, [activeTab])
+
+  const loadDeliveries = async () => {
+    try {
+      setLoading(true)
+      const response = await deliveryAPI.getDeliveries()
+      setDeliveries(response.data)
+    } catch (err) {
+      setError('Erreur lors du chargement des livraisons')
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
+
+  const loadStats = async () => {
+    try {
+      const response = await deliveryAPI.getStats()
+      setStats(response.data)
+    } catch (err) {
+      // Utiliser des stats par défaut si l'API n'est pas disponible
+      setStats({
+        total: deliveries.length,
+        pending: deliveries.filter(d => d.status === 'pending').length,
+        active: deliveries.filter(d => ['accepted', 'in_progress'].includes(d.status)).length,
+        completed: deliveries.filter(d => d.status === 'completed').length
+      })
+    }
+  }
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue)
   }
 
-  const handleAcceptDelivery = (deliveryId) => {
-    setDeliveries(prev => 
-      prev.map(delivery => 
-        delivery.id === deliveryId 
-          ? { ...delivery, status: 'accepted', accepted_at: new Date().toLocaleString() }
-          : delivery
-      )
-    )
+  const handleAcceptDelivery = async (deliveryId) => {
+    try {
+      await deliveryAPI.acceptDelivery(deliveryId)
+      await loadDeliveries() // Recharger les données
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de l\'acceptation de la livraison')
+    }
   }
 
-  const handleStartDelivery = (deliveryId) => {
-    setDeliveries(prev => 
-      prev.map(delivery => 
-        delivery.id === deliveryId 
-          ? { ...delivery, status: 'in_progress', started_at: new Date().toLocaleString() }
-          : delivery
-      )
-    )
+  const handleStartDelivery = async (deliveryId) => {
+    try {
+      await deliveryAPI.startDelivery(deliveryId)
+      await loadDeliveries()
+      setError('')
+    } catch (err) {
+      setError('Erreur lors du démarrage de la livraison')
+    }
   }
 
-  const handleCompleteDelivery = (deliveryId) => {
-    setDeliveries(prev => 
-      prev.map(delivery => 
-        delivery.id === deliveryId 
-          ? { ...delivery, status: 'completed', completed_at: new Date().toLocaleString() }
-          : delivery
-      )
-    )
+  const handleCompleteDelivery = async (deliveryId) => {
+    try {
+      await deliveryAPI.completeDelivery(deliveryId)
+      await loadDeliveries()
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de la finalisation de la livraison')
+    }
   }
 
   const getStatusColor = (status) => {
@@ -147,9 +147,15 @@ const DeliveryDashboard = () => {
           Tableau de Bord Livreur
         </Typography>
         <Typography variant="body1" color="textSecondary">
-          Bienvenue, {user?.name} ! Gérez vos livraisons.
+          Bienvenue, {user?.first_name} ! Gérez vos livraisons.
         </Typography>
       </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -159,7 +165,7 @@ const DeliveryDashboard = () => {
                 Livraisons totales
               </Typography>
               <Typography variant="h4" component="div">
-                {deliveries.length}
+                {stats.total || deliveries.length}
               </Typography>
             </CardContent>
           </Card>
@@ -171,7 +177,7 @@ const DeliveryDashboard = () => {
                 En attente
               </Typography>
               <Typography variant="h4" component="div" color="warning.main">
-                {pendingDeliveries.length}
+                {stats.pending || pendingDeliveries.length}
               </Typography>
             </CardContent>
           </Card>
@@ -183,7 +189,7 @@ const DeliveryDashboard = () => {
                 En cours
               </Typography>
               <Typography variant="h4" component="div" color="info.main">
-                {activeDeliveries.length}
+                {stats.active || activeDeliveries.length}
               </Typography>
             </CardContent>
           </Card>
@@ -195,7 +201,7 @@ const DeliveryDashboard = () => {
                 Terminées
               </Typography>
               <Typography variant="h4" component="div" color="success.main">
-                {completedDeliveries.length}
+                {stats.completed || completedDeliveries.length}
               </Typography>
             </CardContent>
           </Card>
@@ -214,293 +220,231 @@ const DeliveryDashboard = () => {
 
         <Box sx={{ p: 3 }}>
           {activeTab === 0 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Livraisons en attente
-              </Typography>
-              {pendingDeliveries.length === 0 ? (
-                <Card>
-                  <CardContent sx={{ textAlign: 'center', py: 6 }}>
-                    <Pending sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                    <Typography variant="h6" color="textSecondary">
-                      Aucune livraison en attente
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Les nouvelles livraisons apparaîtront ici
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ) : (
-                <List>
-                  {pendingDeliveries.map((delivery) => (
-                    <Card key={delivery.id} sx={{ mb: 2 }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="h6" gutterBottom>
-                              Commande #{delivery.order_id}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                              <Person fontSize="small" color="action" />
-                              <Typography variant="body1">
-                                {delivery.customer}
-                              </Typography>
-                            </Box>
-                            
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              📞 {delivery.phone}
-                            </Typography>
-                            
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              📍 {delivery.address}
-                            </Typography>
-                            
-                            <Typography variant="body2" gutterBottom>
-                              🛒 Articles: {delivery.items.join(', ')}
-                            </Typography>
-                            
-                            <Typography variant="body2" gutterBottom>
-                              👨‍🌾 Agriculteur: {delivery.farmer}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                              <Chip 
-                                label={getStatusText(delivery.status)} 
-                                color={getStatusColor(delivery.status)}
-                                icon={getStatusIcon(delivery.status)}
-                              />
-                              <Typography variant="h6" color="primary">
-                                {delivery.total} FCFA
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                          <Button
-                            variant="contained"
-                            startIcon={<CheckCircle />}
-                            onClick={() => handleAcceptDelivery(delivery.id)}
-                            fullWidth
-                          >
-                            Accepter la Livraison
-                          </Button>
-                        </Box>
-                        
-                        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                          Créée le: {delivery.created_at}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </List>
-              )}
-            </Box>
+            <DeliveryTab
+              deliveries={pendingDeliveries}
+              title="Livraisons en attente"
+              emptyMessage="Aucune livraison en attente"
+              actionButton={{
+                text: 'Accepter la Livraison',
+                icon: <CheckCircle />,
+                onClick: handleAcceptDelivery
+              }}
+              getStatusColor={getStatusColor}
+              getStatusText={getStatusText}
+              getStatusIcon={getStatusIcon}
+            />
           )}
 
           {activeTab === 1 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Livraisons en cours
-              </Typography>
-              {activeDeliveries.length === 0 ? (
-                <Card>
-                  <CardContent sx={{ textAlign: 'center', py: 6 }}>
-                    <DirectionsCar sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                    <Typography variant="h6" color="textSecondary">
-                      Aucune livraison en cours
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Acceptez une livraison pour commencer
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ) : (
-                <List>
-                  {activeDeliveries.map((delivery) => (
-                    <Card key={delivery.id} sx={{ mb: 2 }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="h6" gutterBottom>
-                              Commande #{delivery.order_id}
-                            </Typography>
-                            
-                            <Typography variant="body1" gutterBottom>
-                              {delivery.customer}
-                            </Typography>
-                            
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              📍 {delivery.address}
-                            </Typography>
-                            
-                            <Typography variant="body2" gutterBottom>
-                              📞 {delivery.phone}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                              <Chip 
-                                label={getStatusText(delivery.status)} 
-                                color={getStatusColor(delivery.status)}
-                                icon={getStatusIcon(delivery.status)}
-                              />
-                              <Typography variant="h6" color="primary">
-                                {delivery.total} FCFA
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                          {delivery.status === 'accepted' && (
-                            <Button
-                              variant="contained"
-                              startIcon={<DirectionsCar />}
-                              onClick={() => handleStartDelivery(delivery.id)}
-                              fullWidth
-                            >
-                              Démarrer la Livraison
-                            </Button>
-                          )}
-                          
-                          {delivery.status === 'in_progress' && (
-                            <Button
-                              variant="contained"
-                              color="success"
-                              startIcon={<CheckCircle />}
-                              onClick={() => handleCompleteDelivery(delivery.id)}
-                              fullWidth
-                            >
-                              Marquer comme Livrée
-                            </Button>
-                          )}
-                        </Box>
-                        
-                        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                          Acceptée le: {delivery.accepted_at}
-                          {delivery.started_at && ` • Début: ${delivery.started_at}`}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </List>
-              )}
-            </Box>
+            <DeliveryTab
+              deliveries={activeDeliveries}
+              title="Livraisons en cours"
+              emptyMessage="Aucune livraison en cours"
+              actionButtons={[
+                {
+                  text: 'Démarrer la Livraison',
+                  icon: <DirectionsCar />,
+                  onClick: handleStartDelivery,
+                  show: (delivery) => delivery.status === 'accepted'
+                },
+                {
+                  text: 'Marquer comme Livrée',
+                  icon: <CheckCircle />,
+                  onClick: handleCompleteDelivery,
+                  show: (delivery) => delivery.status === 'in_progress'
+                }
+              ]}
+              getStatusColor={getStatusColor}
+              getStatusText={getStatusText}
+              getStatusIcon={getStatusIcon}
+            />
           )}
 
           {activeTab === 2 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Historique des Livraisons
-              </Typography>
-              {completedDeliveries.length === 0 ? (
-                <Card>
-                  <CardContent sx={{ textAlign: 'center', py: 6 }}>
-                    <History sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                    <Typography variant="h6" color="textSecondary">
-                      Aucune livraison terminée
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Votre historique apparaîtra ici
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ) : (
-                <List>
-                  {completedDeliveries.map((delivery) => (
-                    <Card key={delivery.id} sx={{ mb: 2 }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="h6" gutterBottom>
-                              Commande #{delivery.order_id}
-                            </Typography>
-                            
-                            <Typography variant="body1" gutterBottom>
-                              {delivery.customer}
-                            </Typography>
-                            
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              📍 {delivery.address}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                              <Chip 
-                                label={getStatusText(delivery.status)} 
-                                color={getStatusColor(delivery.status)}
-                                icon={getStatusIcon(delivery.status)}
-                              />
-                              <Typography variant="h6" color="primary">
-                                {delivery.total} FCFA
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </Box>
-                        
-                        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                          Livrée le: {delivery.completed_at}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </List>
-              )}
-            </Box>
+            <DeliveryTab
+              deliveries={completedDeliveries}
+              title="Historique des Livraisons"
+              emptyMessage="Aucune livraison terminée"
+              getStatusColor={getStatusColor}
+              getStatusText={getStatusText}
+              getStatusIcon={getStatusIcon}
+            />
           )}
 
           {activeTab === 3 && (
-            <Box>
-              <Typography variant="h5" gutterBottom>
-                Mon Profil Livreur
-              </Typography>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Informations Personnelles
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Nom: {user?.name}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Email: {user?.email}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Téléphone: {user?.phone}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Adresse: {user?.address}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Statistiques du Mois
-                      </Typography>
-                      <Typography variant="body2">
-                        🚚 Livraisons effectuées: 24
-                      </Typography>
-                      <Typography variant="body2">
-                        💰 Revenus totaux: 45K FCFA
-                      </Typography>
-                      <Typography variant="body2">
-                        ⭐ Note moyenne: 4.8/5
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
-            </Box>
+            <ProfileTab user={user} />
           )}
         </Box>
       </Paper>
     </Container>
   )
 }
+
+// Composant réutilisable pour les onglets de livraison
+const DeliveryTab = ({ deliveries, title, emptyMessage, actionButton, actionButtons, getStatusColor, getStatusText, getStatusIcon }) => {
+  if (deliveries.length === 0) {
+    return (
+      <Card>
+        <CardContent sx={{ textAlign: 'center', py: 6 }}>
+          <Pending sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h6" color="textSecondary">
+            {emptyMessage}
+          </Typography>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Box>
+      <Typography variant="h6" gutterBottom>
+        {title}
+      </Typography>
+      <List>
+        {deliveries.map((delivery) => (
+          <DeliveryCard
+            key={delivery.id}
+            delivery={delivery}
+            actionButton={actionButton}
+            actionButtons={actionButtons}
+            getStatusColor={getStatusColor}
+            getStatusText={getStatusText}
+            getStatusIcon={getStatusIcon}
+          />
+        ))}
+      </List>
+    </Box>
+  )
+}
+
+// Composant carte de livraison
+const DeliveryCard = ({ delivery, actionButton, actionButtons, getStatusColor, getStatusText, getStatusIcon }) => (
+  <Card sx={{ mb: 2 }}>
+    <CardContent>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" gutterBottom>
+            Commande #{delivery.order_id}
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Person fontSize="small" color="action" />
+            <Typography variant="body1">
+              {delivery.customer_name}
+            </Typography>
+          </Box>
+          
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            📞 {delivery.customer_phone}
+          </Typography>
+          
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            📍 {delivery.delivery_address}
+          </Typography>
+          
+          <Typography variant="body2" gutterBottom>
+            🛒 Articles: {delivery.items?.join(', ') || 'Chargement...'}
+          </Typography>
+          
+          <Typography variant="body2" gutterBottom>
+            👨‍🌾 Agriculteur: {delivery.farmer_name}
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+            <Chip 
+              label={getStatusText(delivery.status)} 
+              color={getStatusColor(delivery.status)}
+              icon={getStatusIcon(delivery.status)}
+            />
+            <Typography variant="h6" color="primary">
+              {delivery.total_amount} FCFA
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+      
+      <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+        {actionButton && (
+          <Button
+            variant="contained"
+            startIcon={actionButton.icon}
+            onClick={() => actionButton.onClick(delivery.id)}
+            fullWidth
+          >
+            {actionButton.text}
+          </Button>
+        )}
+        
+        {actionButtons && actionButtons.map((btn, index) => 
+          btn.show(delivery) && (
+            <Button
+              key={index}
+              variant="contained"
+              startIcon={btn.icon}
+              onClick={() => btn.onClick(delivery.id)}
+              fullWidth
+            >
+              {btn.text}
+            </Button>
+          )
+        )}
+      </Box>
+      
+      <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+        Créée le: {new Date(delivery.created_at).toLocaleString('fr-FR')}
+      </Typography>
+    </CardContent>
+  </Card>
+)
+
+// Composant profil
+const ProfileTab = ({ user }) => (
+  <Box>
+    <Typography variant="h5" gutterBottom>
+      Mon Profil Livreur
+    </Typography>
+    <Grid container spacing={3}>
+      <Grid item xs={12} md={6}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Informations Personnelles
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Nom: {user?.first_name} {user?.last_name}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Email: {user?.email}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Téléphone: {user?.phone_number || 'Non renseigné'}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Adresse: {user?.address || 'Non renseignée'}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+      <Grid item xs={12} md={6}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Statistiques du Mois
+            </Typography>
+            <Typography variant="body2">
+              🚚 Livraisons effectuées: 24
+            </Typography>
+            <Typography variant="body2">
+              💰 Revenus totaux: 45K FCFA
+            </Typography>
+            <Typography variant="body2">
+              ⭐ Note moyenne: 4.8/5
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  </Box>
+)
 
 export default DeliveryDashboard

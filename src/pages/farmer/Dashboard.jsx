@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+// pages/farmer/Dashboard.jsx
+import React, { useState, useEffect } from 'react'
 import {
   Container,
   Typography,
@@ -9,7 +10,8 @@ import {
   Tab,
   Button,
   Card,
-  CardContent
+  CardContent,
+  Alert
 } from '@mui/material'
 import {
   Add,
@@ -24,29 +26,117 @@ import StatsCard from '../../components/admin/StatsCard'
 import ProductList from '../../components/farmer/ProductList'
 import ProductForm from '../../components/farmer/ProductForm'
 import OrderList from '../../components/farmer/OrderList'
+import { authAPI, productsAPI } from '../../services/api'
 
 const FarmerDashboard = () => {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState(0)
   const [showProductForm, setShowProductForm] = useState(false)
+  const [products, setProducts] = useState([])
+  const [orders, setOrders] = useState([])
+  const [stats, setStats] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // Données mockées
-  const stats = [
+  // Charger les données
+  useEffect(() => {
+    loadData()
+  }, [activeTab])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      if (activeTab === 0) {
+        // Charger les produits
+        const productsResponse = await authAPI.getMyProducts()
+        setProducts(productsResponse.data)
+      } else if (activeTab === 1) {
+        // Charger les commandes
+        const ordersResponse = await authAPI.getMyOrders()
+        setOrders(ordersResponse.data)
+      } else if (activeTab === 3) {
+        // Charger les statistiques
+        const statsResponse = await authAPI.getStats()
+        setStats(statsResponse.data)
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement des données')
+      console.error('Load data error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue)
+  }
+
+  const handleAddProduct = async (formData) => {
+    try {
+      setLoading(true)
+      const response = await authAPI.createProduct(formData)
+      setProducts(prev => [response.data, ...prev])
+      setShowProductForm(false)
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de la création du produit')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditProduct = async (productId, productData) => {
+    try {
+      const response = await authAPI.updateProduct(productId, productData)
+      setProducts(prev => prev.map(p => p.id === productId ? response.data : p))
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de la modification du produit')
+    }
+  }
+
+  const handleDeleteProduct = async (productId) => {
+    try {
+      await authAPI.deleteProduct(productId)
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de la suppression du produit')
+    }
+  }
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const response = await authAPI.updateOrderStatus(orderId, newStatus)
+      setOrders(prev => prev.map(o => o.id === orderId ? response.data : o))
+      setError('')
+    } catch (err) {
+      setError('Erreur lors de la mise à jour du statut')
+    }
+  }
+
+  // Statistiques par défaut si l'API n'est pas encore implémentée
+  const defaultStats = [
     {
       title: 'Produits Actifs',
-      value: '12',
+      value: products.length.toString(),
       change: 8,
       icon: <Inventory />
     },
     {
       title: 'Commandes du Mois',
-      value: '24',
+      value: orders.filter(o => new Date(o.created_at).getMonth() === new Date().getMonth()).length.toString(),
       change: 15,
       icon: <Receipt />
     },
     {
       title: 'Revenus du Mois',
-      value: '156K FCFA',
+      value: `${orders
+        .filter(o => new Date(o.created_at).getMonth() === new Date().getMonth())
+        .reduce((sum, order) => sum + order.total, 0)
+        .toLocaleString()} FCFA`,
       change: 12,
       icon: <TrendingUp />
     },
@@ -58,70 +148,6 @@ const FarmerDashboard = () => {
     }
   ]
 
-  const products = [
-    {
-      id: 1,
-      name: 'Tomates Fraîches',
-      category: 'Légumes',
-      price: 1200,
-      quantity: 50,
-      unit: 'kg',
-      description: 'Tomates rouges et juteuses cultivées localement',
-      images: ['/placeholder-product.jpg'],
-      is_available: true,
-      sales: 15
-    },
-    {
-      id: 2,
-      name: 'Oignons Locaux',
-      category: 'Légumes',
-      price: 600,
-      quantity: 100,
-      unit: 'kg',
-      description: 'Oignons frais et parfumés',
-      images: ['/placeholder-product.jpg'],
-      is_available: true,
-      sales: 8
-    }
-  ]
-
-  const orders = [
-    {
-      id: 1,
-      customer: { name: 'Marie Lambert', phone: '+237 6 54 32 10 97' },
-      total: 8500,
-      status: 'confirmed',
-      items: [
-        { product: 'Tomates Fraîches', quantity: 2, price: 1200 },
-        { product: 'Oignons Locaux', quantity: 1, price: 600 }
-      ],
-      created_at: '2024-01-20 10:00',
-      delivery_address: 'Yaoundé, Cameroun'
-    }
-  ]
-
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue)
-  }
-
-  const handleAddProduct = (formData) => {
-    console.log('Ajouter produit:', formData)
-    setShowProductForm(false)
-  }
-
-  const handleEditProduct = (product) => {
-    console.log('Modifier produit:', product)
-    setShowProductForm(true)
-  }
-
-  const handleDeleteProduct = (productId) => {
-    console.log('Supprimer produit:', productId)
-  }
-
-  const handleUpdateOrderStatus = (orderId, newStatus) => {
-    console.log('Mettre à jour commande:', orderId, newStatus)
-  }
-
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box sx={{ mb: 4 }}>
@@ -129,12 +155,18 @@ const FarmerDashboard = () => {
           Tableau de Bord Agriculteur
         </Typography>
         <Typography variant="body1" color="textSecondary">
-          Bienvenue, {user?.name} ! Gérez vos produits et suivez vos ventes.
+          Bienvenue, {user?.first_name} ! Gérez vos produits et suivez vos ventes.
         </Typography>
       </Box>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {stats.map((stat, index) => (
+        {(stats.length > 0 ? stats : defaultStats).map((stat, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
             <StatsCard {...stat} />
           </Grid>
@@ -162,6 +194,7 @@ const FarmerDashboard = () => {
                   variant="contained"
                   startIcon={<Add />}
                   onClick={() => setShowProductForm(true)}
+                  disabled={loading}
                 >
                   Ajouter un Produit
                 </Button>
@@ -171,12 +204,14 @@ const FarmerDashboard = () => {
                 <ProductForm 
                   onSubmit={handleAddProduct}
                   onCancel={() => setShowProductForm(false)}
+                  loading={loading}
                 />
               ) : (
                 <ProductList
                   products={products}
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
+                  loading={loading}
                 />
               )}
             </Box>
@@ -190,6 +225,7 @@ const FarmerDashboard = () => {
               <OrderList
                 orders={orders}
                 onUpdateStatus={handleUpdateOrderStatus}
+                loading={loading}
               />
             </Box>
           )}
@@ -208,7 +244,11 @@ const FarmerDashboard = () => {
                   <Typography variant="body2" color="textSecondary">
                     Connectez-vous avec vos clients via la messagerie intégrée
                   </Typography>
-                  <Button variant="contained" sx={{ mt: 2 }}>
+                  <Button 
+                    variant="contained" 
+                    sx={{ mt: 2 }}
+                    onClick={() => window.location.href = '/chat'}
+                  >
                     Ouvrir la Messagerie
                   </Button>
                 </CardContent>
@@ -229,7 +269,7 @@ const FarmerDashboard = () => {
                         Ventes Mensuelles
                       </Typography>
                       <Typography variant="body2" color="textSecondary">
-                        Graphique des ventes à implémenter
+                        Graphique des ventes à implémenter avec les données de l'API
                       </Typography>
                     </CardContent>
                   </Card>

@@ -64,20 +64,24 @@ const RegisterForm = () => {
     watch,
     formState: { errors }
   } = useForm({
-    resolver: yupResolver(registerSchema)
+    resolver: yupResolver(registerSchema),
+    defaultValues: {
+      user_type: '' // Valeur par défaut vide
+    }
   })
 
   const userType = watch('user_type')
 
   useEffect(() => {
     const type = searchParams.get('type')
-    if (type === 'farmer' || type === 'buyer') {
-      setValue('user_type', type)
+    if (type === 'farmer' || type === 'buyer' || type === 'delivery') {
+      setValue('user_type', type, { shouldValidate: true })
     }
   }, [searchParams, setValue])
 
   const onSubmit = async (data) => {
-    // Préparer les données pour l'API Django
+    console.log('Données du formulaire:', data) // Pour debug
+    
     const userData = {
       first_name: data.first_name,
       last_name: data.last_name,
@@ -86,25 +90,21 @@ const RegisterForm = () => {
       user_type: data.user_type,
       phone: data.phone,
       address: data.address,
-      farm_name: data.farmName || ''
+      ...(data.user_type === 'farmer' && { farm_name: data.farmName || '' }),
+      ...((data.user_type === 'buyer' || data.user_type === 'delivery') && { 
+        company_name: data.companyName || '' 
+      })
     }
 
     const result = await registerUser(userData)
     
     if (result.success) {
-      if (!result.requiresLogin) {
-        // Redirection automatique après inscription
-        const userRole = result.user?.user_type || result.user?.role
-        if (userRole === 'farmer') {
-          navigate('/farmer')
-        } else if (userRole === 'delivery') {
-          navigate('/delivery')
-        } else {
-          navigate('/customer')
-        }
+      if (userData.user_type === 'farmer') {
+        navigate('/farmer')
+      } else if (userData.user_type === 'delivery') {
+        navigate('/delivery')
       } else {
-        // Redirection vers la page de login
-        navigate('/login')
+        navigate('/customer')
       }
     }
   }
@@ -135,14 +135,6 @@ const RegisterForm = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
-            }}
           />
         </Grid>
 
@@ -162,14 +154,6 @@ const RegisterForm = () => {
                   <Person sx={{ color: 'text.secondary' }} />
                 </InputAdornment>
               ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
             }}
           />
         </Grid>
@@ -191,14 +175,6 @@ const RegisterForm = () => {
                   <Email sx={{ color: 'text.secondary' }} />
                 </InputAdornment>
               ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
             }}
           />
         </Grid>
@@ -225,20 +201,11 @@ const RegisterForm = () => {
                   <IconButton
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
-                    sx={{ color: 'text.secondary' }}
                   >
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
               ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
             }}
           />
         </Grid>
@@ -265,47 +232,35 @@ const RegisterForm = () => {
                   <IconButton
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     edge="end"
-                    sx={{ color: 'text.secondary' }}
                   >
                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
               ),
             }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
-            }}
           />
         </Grid>
 
+        {/* CHAMP USER_TYPE CORRIGÉ */}
         <Grid item xs={12} sm={6}>
           <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Je suis
+            Je suis *
           </Typography>
           <FormControl fullWidth error={!!errors.user_type}>
-            <InputLabel>Sélectionnez votre rôle</InputLabel>
+            <InputLabel id="user-type-label">Sélectionnez votre rôle</InputLabel>
             <Select
               {...register('user_type')}
+              labelId="user-type-label"
               label="Sélectionnez votre rôle"
-              defaultValue=""
-              sx={{
-                borderRadius: 2,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                }
-              }}
+              value={userType}
+              onChange={(e) => setValue('user_type', e.target.value, { shouldValidate: true })}
             >
               <MenuItem value="buyer">Acheteur</MenuItem>
               <MenuItem value="farmer">Agriculteur</MenuItem>
-              <MenuItem value="delivery">Livreur</MenuItem>
+              <MenuItem value="delivery">Agence de Livraison</MenuItem>
             </Select>
             {errors.user_type && (
-              <Typography variant="caption" color="error">
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
                 {errors.user_type.message}
               </Typography>
             )}
@@ -329,14 +284,6 @@ const RegisterForm = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
-            }}
           />
         </Grid>
 
@@ -359,14 +306,6 @@ const RegisterForm = () => {
                 </InputAdornment>
               ),
             }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover fieldset': {
-                  borderColor: 'primary.main',
-                },
-              }
-            }}
           />
         </Grid>
 
@@ -386,13 +325,25 @@ const RegisterForm = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&:hover fieldset': {
-                    borderColor: 'primary.main',
-                  },
-                }
+            />
+          </Grid>
+        )}
+
+        {(userType === 'buyer' || userType === 'delivery') && (
+          <Grid item xs={12}>
+            <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
+              Nom de l'entreprise (Optionnel)
+            </Typography>
+            <TextField
+              fullWidth
+              placeholder="Entrez le nom de votre entreprise"
+              {...register('companyName')}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Business sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
               }}
             />
           </Grid>
@@ -417,7 +368,6 @@ const RegisterForm = () => {
           '&:hover': {
             background: 'linear-gradient(45deg, #2a7a2a, #1a5a1a)',
             boxShadow: '0 6px 16px rgba(58, 154, 58, 0.4)',
-            transform: 'translateY(-1px)'
           },
           '&:disabled': {
             background: 'grey.300'

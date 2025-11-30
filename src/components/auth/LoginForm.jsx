@@ -52,17 +52,17 @@ const LoginForm = () => {
     const result = await login(data.email, data.password)
     
     if (result.success) {
-      // Redirection basée sur le rôle
-      const userRole = result.user?.user_type || result.user?.role
+      // Redirection basée sur le user_type de Django
+      const userType = result.user?.user_type
       
-      if (userRole === 'admin') {
+      if (userType === 'admin') {
         navigate('/admin')
-      } else if (userRole === 'farmer') {
+      } else if (userType === 'farmer') {
         navigate('/farmer')
-      } else if (userRole === 'delivery') {
+      } else if (userType === 'delivery') {
         navigate('/delivery')
       } else {
-        navigate('/customer')
+        navigate('/customer') // Pour 'buyer' et autres types
       }
     }
   }
@@ -207,22 +207,16 @@ const LoginForm = () => {
         {isLoading ? 'Signing in...' : 'Login'}
       </Button>
 
-      {/* Comptes de test */}
+      {/* Comptes de test mis à jour pour Django */}
       <Box sx={{ mt: 3, p: 2, backgroundColor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
         <Typography variant="body2" fontWeight="bold" gutterBottom color="text.primary">
-          Test Accounts:
+          Comptes de test Django:
         </Typography>
         <Typography variant="caption" display="block" color="text.secondary">
-          Admin: admin@terrabia.com / admin123
+          Utilisez les comptes créés dans votre base Django
         </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Farmer: farmer@test.com / farmer123
-        </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Customer: customer@test.com / customer123
-        </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Delivery: delivery@test.com / delivery123
+        <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
+          Format: email / mot de passe
         </Typography>
       </Box>
     </Box>

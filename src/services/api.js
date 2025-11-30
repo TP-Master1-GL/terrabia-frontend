@@ -1,4 +1,4 @@
-// api.js - Version corrigée pour Django
+// src/api/index.js - CORRIGÉ AVEC PASSWORD_CONFIRM
 import axios from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -11,21 +11,13 @@ const api = axios.create({
   withCredentials: false,
 })
 
-// Intercepteur pour ajouter le token JWT
+// Intercepteur pour ajouter le token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    
-    if (config.method === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now()
-      }
-    }
-    
     return config
   },
   (error) => Promise.reject(error)
@@ -49,54 +41,47 @@ api.interceptors.response.use(
   }
 )
 
-// Test de connexion API
-export const testConnection = async () => {
-  try {
-    const response = await api.get('/products/')
-    return response.data
-  } catch (error) {
-    console.error('Backend connection failed:', error)
-    throw error
-  }
-}
-
-// 🔐 API d'authentification - CORRIGÉE POUR DJANGO
+// 🔐 API d'authentification - CORRIGÉE AVEC PASSWORD_CONFIRM
 export const authAPI = {
-  // Authentification JWT - Format Django standard
+  // Authentification JWT - Format Django
   login: (credentials) => {
-    // Django JWT attend généralement 'username' au lieu de 'email'
     return api.post('/token/', {
-      username: credentials.email, // ou credentials.email selon votre configuration
+      username: credentials.email,
       password: credentials.password
     })
   },
   
   refreshToken: (refreshToken) => api.post('/token/refresh/', { refresh: refreshToken }),
   
-  // Inscription - Format adapté pour Django
+  // Inscription - AVEC PASSWORD_CONFIRM AJOUTÉ
   register: (userData) => {
-    // Format les données pour Django
     const djangoUserData = {
-      first_name: userData.first_name,
-      last_name: userData.last_name,
+      // Champs obligatoires d'AbstractUser
+      username: userData.email,
       email: userData.email,
       password: userData.password,
-      // Si votre API Django nécessite une confirmation de mot de passe
-      password2: userData.password, 
+      password_confirm: userData.password, // ← CHAMP AJOUTÉ ICI
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      
+      // Champs personnalisés de votre modèle User
       user_type: userData.user_type,
-      phone: userData.phone,
+      phone_number: userData.phone,
       address: userData.address,
-      farm_name: userData.farm_name || ''
+      
+      // Champs de profil selon le type d'utilisateur
+      farm_name: userData.farm_name || '',
+      company_name: userData.company_name || ''
     }
+    
+    console.log('Données envoyées à Django:', djangoUserData) // Pour debug
     
     return api.post('/auth/register/', djangoUserData)
   },
   
-  // Authentification personnalisée (si vous l'utilisez)
-  customLogin: (credentials) => api.post('/auth/login/', credentials),
-  
-  // Vérification du token (vous devrez créer cet endpoint dans Django)
+  // Vérification du token et récupération de l'utilisateur
   verifyToken: () => api.get('/auth/verify/'),
+  getCurrentUser: () => api.get('/auth/users/me/'),
   
   // Gestion des tokens
   setTokens: (access, refresh) => {
@@ -109,30 +94,7 @@ export const authAPI = {
   }
 }
 
-// 🛒 API Panier
-export const cartAPI = {
-  getCart: () => api.get('/orders/cart/'),
-  addToCart: (productData) => api.post('/orders/cart/add/', productData),
-  updateCartItem: (itemId, quantity) => api.put(`/orders/cart/items/${itemId}/`, { quantity }),
-  removeFromCart: (itemId) => api.delete(`/orders/cart/items/${itemId}/remove/`),
-}
-
-// 📦 API Commandes
-export const ordersAPI = {
-  getAll: (params) => api.get('/orders/orders/', { params }),
-  getById: (id) => api.get(`/orders/orders/${id}/`),
-  create: (orderData) => api.post('/orders/orders/', orderData),
-  update: (id, orderData) => api.put(`/orders/orders/${id}/`, orderData),
-  getMyOrders: () => api.get('/orders/orders/history/'),
-}
-
-// ⭐ API Avis
-export const reviewsAPI = {
-  create: (reviewData) => api.post('/orders/reviews/', reviewData),
-  getMyReviews: () => api.get('/orders/reviews/my/'),
-}
-
-// 🛍️ API Produits
+// Les autres APIs restent inchangées...
 export const productsAPI = {
   getAll: (params) => api.get('/products/products/', { params }),
   getById: (id) => api.get(`/products/products/${id}/`),
@@ -145,7 +107,21 @@ export const productsAPI = {
   }),
 }
 
-// 💬 API Chat
+export const cartAPI = {
+  getCart: () => api.get('/orders/cart/'),
+  addToCart: (productData) => api.post('/orders/cart/add/', productData),
+  updateCartItem: (itemId, quantity) => api.put(`/orders/cart/items/${itemId}/`, { quantity }),
+  removeFromCart: (itemId) => api.delete(`/orders/cart/items/${itemId}/remove/`),
+}
+
+export const ordersAPI = {
+  getAll: (params) => api.get('/orders/orders/', { params }),
+  getById: (id) => api.get(`/orders/orders/${id}/`),
+  create: (orderData) => api.post('/orders/orders/', orderData),
+  update: (id, orderData) => api.put(`/orders/orders/${id}/`, orderData),
+  getMyOrders: () => api.get('/orders/orders/history/'),
+}
+
 export const chatAPI = {
   getConversations: () => api.get('/chat/conversations/'),
   getConversation: (conversationId) => api.get(`/chat/conversations/${conversationId}/`),
@@ -156,7 +132,6 @@ export const chatAPI = {
   }),
 }
 
-// 👤 API Utilisateurs
 export const usersAPI = {
   getUsers: (params) => api.get('/auth/users/', { params }),
   getUser: (userId) => api.get(`/auth/users/${userId}/`),
@@ -177,6 +152,7 @@ export const apiUtils = {
   logout: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('terrabia_user')
     window.location.href = '/login'
   },
   
