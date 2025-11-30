@@ -1,3 +1,4 @@
+// components/Customer/ProductCard.js
 import React, { useState } from 'react'
 import {
   Card,
@@ -12,43 +13,69 @@ import {
   Dialog,
   DialogContent,
   DialogActions,
-  Fab
+  Fab,
+  CircularProgress,
+  Alert
 } from '@mui/material'
 import {
   AddShoppingCart,
   Favorite,
   FavoriteBorder,
-  Share,
   Visibility,
-  PlayArrow,
   NavigateBefore,
   NavigateNext
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
+import apiService from '../../services/apiService'
 
 const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [isFavorite, setIsFavorite] = useState(product.is_favorite || false)
   const [mediaDialogOpen, setMediaDialogOpen] = useState(false)
   const [selectedMediaIndex, setSelectedMediaIndex] = useState(0)
-  const { user } = useAuth()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const media = product.media || product.images || []
+  const images = product.images || []
 
-  const handleFavoriteClick = () => {
+  const handleFavoriteClick = async () => {
     if (!user) {
-      // Rediriger vers login
+      navigate('/login')
       return
     }
-    setIsFavorite(!isFavorite)
-    onToggleFavorite?.(product.id, !isFavorite)
+
+    try {
+      setLoading(true)
+      await apiService.toggleFavorite(product.id)
+      setIsFavorite(!isFavorite)
+      onToggleFavorite?.(product.id, !isFavorite)
+    } catch (error) {
+      console.error('Error toggling favorite:', error)
+      setError('Erreur lors de la modification des favoris')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!user) {
-      // Rediriger vers login
+      navigate('/login')
       return
     }
-    onAddToCart?.(product.id, 1)
+
+    try {
+      setLoading(true)
+      await apiService.addToCart(product.id, 1)
+      onAddToCart?.(product.id, 1)
+      // Vous pouvez ajouter une notification de succès ici
+    } catch (error) {
+      console.error('Error adding to cart:', error)
+      setError('Erreur lors de l\'ajout au panier')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleMediaClick = (index) => {
@@ -57,11 +84,11 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
   }
 
   const nextMedia = () => {
-    setSelectedMediaIndex((prev) => (prev + 1) % media.length)
+    setSelectedMediaIndex((prev) => (prev + 1) % images.length)
   }
 
   const prevMedia = () => {
-    setSelectedMediaIndex((prev) => (prev - 1 + media.length) % media.length)
+    setSelectedMediaIndex((prev) => (prev - 1 + images.length) % images.length)
   }
 
   const getCategoryColor = (category) => {
@@ -74,14 +101,7 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
       'Légumineuses': 'info',
       'Produits animaux': 'default'
     }
-    return colors[category] || 'default'
-  }
-
-  const getMediaType = (mediaItem) => {
-    if (typeof mediaItem === 'string') {
-      return mediaItem.includes('/video/') || mediaItem.endsWith('.mp4') || mediaItem.endsWith('.mov') ? 'video' : 'image'
-    }
-    return mediaItem.type || 'image'
+    return colors[category?.name] || 'default'
   }
 
   return (
@@ -100,48 +120,15 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
         } 
       }}>
         <Box sx={{ position: 'relative' }}>
-          {media.length > 0 ? (
-            <>
-              {getMediaType(media[0]) === 'image' ? (
-                <CardMedia
-                  component="img"
-                  height="200"
-                  image={typeof media[0] === 'string' ? media[0] : media[0].preview || media[0].url}
-                  alt={product.name}
-                  sx={{ objectFit: 'cover', cursor: 'pointer' }}
-                  onClick={() => handleMediaClick(0)}
-                />
-              ) : (
-                <Box sx={{ position: 'relative', height: 200, backgroundColor: 'grey.900' }}>
-                  <video
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => handleMediaClick(0)}
-                  >
-                    <source src={typeof media[0] === 'string' ? media[0] : media[0].preview || media[0].url} type="video/mp4" />
-                  </video>
-                  <Fab
-                    size="small"
-                    sx={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      backgroundColor: 'rgba(255,255,255,0.9)',
-                      '&:hover': {
-                        backgroundColor: 'white'
-                      }
-                    }}
-                  >
-                    <PlayArrow />
-                  </Fab>
-                </Box>
-              )}
-            </>
+          {images.length > 0 ? (
+            <CardMedia
+              component="img"
+              height="200"
+              image={images[0]?.image || '/placeholder-product.jpg'}
+              alt={product.name}
+              sx={{ objectFit: 'cover', cursor: 'pointer' }}
+              onClick={() => handleMediaClick(0)}
+            />
           ) : (
             <CardMedia
               component="img"
@@ -173,10 +160,10 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
             <Fab size="small" color="primary" onClick={() => handleMediaClick(0)}>
               <Visibility />
             </Fab>
-            {media.length > 1 && (
+            {images.length > 1 && (
               <Fab size="small" color="secondary">
                 <Typography variant="caption" fontWeight="bold">
-                  +{media.length - 1}
+                  +{images.length - 1}
                 </Typography>
               </Fab>
             )}
@@ -184,7 +171,7 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
           
           <Box sx={{ position: 'absolute', top: 8, left: 8 }}>
             <Chip 
-              label={product.category} 
+              label={product.category?.name} 
               size="small" 
               color={getCategoryColor(product.category)}
             />
@@ -195,8 +182,9 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
               size="small" 
               sx={{ backgroundColor: 'rgba(255,255,255,0.9)' }}
               onClick={handleFavoriteClick}
+              disabled={loading}
             >
-              {isFavorite ? <Favorite color="error" /> : <FavoriteBorder />}
+              {loading ? <CircularProgress size={20} /> : (isFavorite ? <Favorite color="error" /> : <FavoriteBorder />)}
             </IconButton>
           </Box>
         </Box>
@@ -207,9 +195,9 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
           </Typography>
 
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2, flexGrow: 1 }}>
-            {product.description.length > 100 
+            {product.description && product.description.length > 100 
               ? `${product.description.substring(0, 100)}...` 
-              : product.description
+              : product.description || 'Aucune description'
             }
           </Typography>
 
@@ -221,12 +209,12 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
           </Box>
 
           <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-            Par {product.farmer?.name}
+            Par {product.farmer?.first_name} {product.farmer?.last_name}
           </Typography>
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" color="primary" fontWeight="bold">
-              {product.price} FCFA
+              {parseFloat(product.price).toLocaleString()} FCFA
             </Typography>
             <Typography variant="body2" color="textSecondary">
               / {product.unit}
@@ -235,16 +223,16 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Chip 
-              label={product.quantity > 0 ? `${product.quantity} disponible` : 'Rupture'} 
-              color={product.quantity > 0 ? 'success' : 'error'}
+              label={product.available && product.stock > 0 ? `${product.stock} disponible` : 'Rupture'} 
+              color={product.available && product.stock > 0 ? 'success' : 'error'}
               size="small"
             />
             
             <Button
               variant="contained"
-              startIcon={<AddShoppingCart />}
+              startIcon={loading ? <CircularProgress size={16} /> : <AddShoppingCart />}
               onClick={handleAddToCart}
-              disabled={product.quantity === 0}
+              disabled={!product.available || product.stock === 0 || loading}
               size="small"
               sx={{
                 borderRadius: 2,
@@ -252,54 +240,41 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
                 fontWeight: '600'
               }}
             >
-              Panier
+              {loading ? '' : 'Panier'}
             </Button>
           </Box>
         </CardContent>
       </Card>
 
-      {/* Dialog pour afficher les médias */}
+      {error && (
+        <Alert severity="error" sx={{ mt: 1 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Dialog pour afficher les images */}
       <Dialog 
         open={mediaDialogOpen} 
         onClose={() => setMediaDialogOpen(false)}
         maxWidth="md"
         fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            backgroundColor: 'black'
-          }
-        }}
       >
         <DialogContent sx={{ p: 0, position: 'relative', minHeight: 400 }}>
-          {media.length > 0 && (
+          {images.length > 0 && (
             <>
-              {getMediaType(media[selectedMediaIndex]) === 'image' ? (
-                <img
-                  src={typeof media[selectedMediaIndex] === 'string' ? media[selectedMediaIndex] : media[selectedMediaIndex].preview || media[selectedMediaIndex].url}
-                  alt={product.name}
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    maxHeight: '70vh',
-                    objectFit: 'contain'
-                  }}
-                />
-              ) : (
-                <video
-                  controls
-                  autoPlay
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    maxHeight: '70vh'
-                  }}
-                >
-                  <source src={typeof media[selectedMediaIndex] === 'string' ? media[selectedMediaIndex] : media[selectedMediaIndex].preview || media[selectedMediaIndex].url} type="video/mp4" />
-                </video>
-              )}
+              <img
+                src={images[selectedMediaIndex]?.image}
+                alt={product.name}
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '70vh',
+                  objectFit: 'contain'
+                }}
+              />
               
               {/* Navigation */}
-              {media.length > 1 && (
+              {images.length > 1 && (
                 <>
                   <IconButton
                     onClick={prevMedia}
@@ -338,9 +313,9 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
         </DialogContent>
         
         {/* Miniatures */}
-        {media.length > 1 && (
-          <Box sx={{ p: 2, display: 'flex', gap: 1, overflowX: 'auto', backgroundColor: 'grey.900' }}>
-            {media.map((mediaItem, index) => (
+        {images.length > 1 && (
+          <Box sx={{ p: 2, display: 'flex', gap: 1, overflowX: 'auto' }}>
+            {images.map((image, index) => (
               <Box
                 key={index}
                 sx={{
@@ -349,43 +324,28 @@ const ProductCard = ({ product, onAddToCart, onToggleFavorite }) => {
                   borderRadius: 1,
                   overflow: 'hidden',
                   cursor: 'pointer',
-                  border: selectedMediaIndex === index ? '2px solid white' : '1px solid grey',
+                  border: selectedMediaIndex === index ? '2px solid primary.main' : '1px solid grey',
                   opacity: selectedMediaIndex === index ? 1 : 0.7,
                   flexShrink: 0
                 }}
                 onClick={() => setSelectedMediaIndex(index)}
               >
-                {getMediaType(mediaItem) === 'image' ? (
-                  <img
-                    src={typeof mediaItem === 'string' ? mediaItem : mediaItem.preview || mediaItem.url}
-                    alt={`${product.name} ${index + 1}`}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: 'grey.800',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    <PlayArrow sx={{ color: 'white', fontSize: 20 }} />
-                  </Box>
-                )}
+                <img
+                  src={image.image}
+                  alt={`${product.name} ${index + 1}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
               </Box>
             ))}
           </Box>
         )}
         
-        <DialogActions sx={{ backgroundColor: 'grey.900' }}>
-          <Button onClick={() => setMediaDialogOpen(false)} sx={{ color: 'white' }}>
+        <DialogActions>
+          <Button onClick={() => setMediaDialogOpen(false)}>
             Fermer
           </Button>
         </DialogActions>

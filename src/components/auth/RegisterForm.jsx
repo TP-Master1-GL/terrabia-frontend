@@ -1,14 +1,12 @@
 // components/auth/RegisterForm.jsx
 import React, { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   TextField,
   Button,
-  Typography,
   Alert,
+  CircularProgress,
   IconButton,
   InputAdornment,
   FormControl,
@@ -22,184 +20,329 @@ import {
   VisibilityOff,
   Person,
   Email,
-  Lock,
-  Business,
   Phone,
-  LocationOn
+  LocationOn,
+  Business,
+  Agriculture
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-
-const registerSchema = yup.object({
-  first_name: yup.string().required('Le prénom est requis'),
-  last_name: yup.string().required('Le nom est requis'),
-  email: yup
-    .string()
-    .email('Adresse email invalide')
-    .required('L\'email est requis'),
-  password: yup
-    .string()
-    .min(6, 'Le mot de passe doit contenir au moins 6 caractères')
-    .required('Le mot de passe est requis'),
-  confirmPassword: yup
-    .string()
-    .oneOf([yup.ref('password'), null], 'Les mots de passe ne correspondent pas')
-    .required('La confirmation du mot de passe est requise'),
-  user_type: yup.string().required('Le type d\'utilisateur est requis'),
-  phone: yup.string().required('Le numéro de téléphone est requis'),
-  address: yup.string().required('L\'adresse est requise')
-})
 
 const RegisterForm = () => {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: '',
+    password_confirm: '',
+    user_type: 'buyer',
+    farm_name: '',
+    company_name: ''
+  })
+  const [formErrors, setFormErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const { register: registerUser, isLoading, error } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { register, error, clearError } = useAuth()
   const navigate = useNavigate()
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors }
-  } = useForm({
-    resolver: yupResolver(registerSchema),
-    defaultValues: {
-      user_type: '' // Valeur par défaut vide
-    }
-  })
-
-  const userType = watch('user_type')
-
   useEffect(() => {
-    const type = searchParams.get('type')
-    if (type === 'farmer' || type === 'buyer' || type === 'delivery') {
-      setValue('user_type', type, { shouldValidate: true })
+    // Nettoyer les erreurs au démontage
+    return () => {
+      clearError()
     }
-  }, [searchParams, setValue])
+  }, [clearError])
 
-  const onSubmit = async (data) => {
-    console.log('Données du formulaire:', data) // Pour debug
+  const validateForm = () => {
+    const errors = {}
     
-    const userData = {
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      password: data.password,
-      user_type: data.user_type,
-      phone: data.phone,
-      address: data.address,
-      ...(data.user_type === 'farmer' && { farm_name: data.farmName || '' }),
-      ...((data.user_type === 'buyer' || data.user_type === 'delivery') && { 
-        company_name: data.companyName || '' 
-      })
+    if (!formData.first_name.trim()) errors.first_name = 'Le prénom est requis'
+    if (!formData.last_name.trim()) errors.last_name = 'Le nom est requis'
+    
+    if (!formData.email.trim()) {
+      errors.email = 'L\'email est requis'
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      errors.email = 'Format d\'email invalide'
+    }
+    
+    if (!formData.password) {
+      errors.password = 'Le mot de passe est requis'
+    } else if (formData.password.length < 6) {
+      errors.password = 'Le mot de passe doit contenir au moins 6 caractères'
+    }
+    
+    if (!formData.password_confirm) {
+      errors.password_confirm = 'La confirmation du mot de passe est requise'
+    } else if (formData.password !== formData.password_confirm) {
+      errors.password_confirm = 'Les mots de passe ne correspondent pas'
+    }
+    
+    if (formData.user_type === 'farmer' && !formData.farm_name.trim()) {
+      errors.farm_name = 'Le nom de la ferme est requis pour les agriculteurs'
+    }
+    
+    if (formData.user_type === 'delivery' && !formData.company_name.trim()) {
+      errors.company_name = 'Le nom de l\'entreprise est requis pour les livreurs'
+    }
+    
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+    
+    // Clear error when user starts typing
+    if (formErrors[name]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }))
+    }
+    clearError()
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
     }
 
-    const result = await registerUser(userData)
+    setIsSubmitting(true)
+
+    const result = await register(formData)
     
     if (result.success) {
-      if (userData.user_type === 'farmer') {
-        navigate('/farmer')
-      } else if (userData.user_type === 'delivery') {
-        navigate('/delivery')
-      } else {
-        navigate('/customer')
-      }
+      // Redirection gérée par le composant parent
+      console.log('Registration successful, redirecting...')
+    } else {
+      console.log('Registration failed:', result.message)
+    }
+
+    setIsSubmitting(false)
+  }
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword)
+  }
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword)
+  }
+
+  const getUserTypeIcon = () => {
+    switch (formData.user_type) {
+      case 'farmer':
+        return <Agriculture />
+      case 'delivery':
+        return <Business />
+      default:
+        return <Person />
     }
   }
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 2,
+            '& .MuiAlert-message': {
+              width: '100%'
+            }
+          }}
+        >
           {error}
         </Alert>
       )}
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Prénom
-          </Typography>
           <TextField
+            required
             fullWidth
-            placeholder="Entrez votre prénom"
-            {...register('first_name')}
-            error={!!errors.first_name}
-            helperText={errors.first_name?.message}
+            name="first_name"
+            label="Prénom"
+            value={formData.first_name}
+            onChange={handleChange}
+            error={!!formErrors.first_name}
+            helperText={formErrors.first_name}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Person sx={{ color: 'text.secondary' }} />
+                  <Person color="action" />
                 </InputAdornment>
               ),
             }}
           />
         </Grid>
-
         <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Nom
-          </Typography>
           <TextField
+            required
             fullWidth
-            placeholder="Entrez votre nom"
-            {...register('last_name')}
-            error={!!errors.last_name}
-            helperText={errors.last_name?.message}
+            name="last_name"
+            label="Nom"
+            value={formData.last_name}
+            onChange={handleChange}
+            error={!!formErrors.last_name}
+            helperText={formErrors.last_name}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Person sx={{ color: 'text.secondary' }} />
+                  <Person color="action" />
                 </InputAdornment>
               ),
             }}
           />
         </Grid>
-
+        
         <Grid item xs={12}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Email
-          </Typography>
           <TextField
+            required
             fullWidth
-            placeholder="Entrez votre email"
+            name="email"
+            label="Adresse email"
             type="email"
-            {...register('email')}
-            error={!!errors.email}
-            helperText={errors.email?.message}
+            value={formData.email}
+            onChange={handleChange}
+            error={!!formErrors.email}
+            helperText={formErrors.email}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Email sx={{ color: 'text.secondary' }} />
+                  <Email color="action" />
                 </InputAdornment>
               ),
             }}
           />
         </Grid>
-
+        
         <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Mot de passe
-          </Typography>
           <TextField
             fullWidth
-            placeholder="Créez un mot de passe"
-            type={showPassword ? 'text' : 'password'}
-            {...register('password')}
-            error={!!errors.password}
-            helperText={errors.password?.message}
+            name="phone"
+            label="Téléphone"
+            value={formData.phone}
+            onChange={handleChange}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <Lock sx={{ color: 'text.secondary' }} />
+                  <Phone color="action" />
                 </InputAdornment>
               ),
+            }}
+          />
+        </Grid>
+        
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel>Type de compte *</InputLabel>
+            <Select
+              name="user_type"
+              value={formData.user_type}
+              label="Type de compte *"
+              onChange={handleChange}
+              startAdornment={
+                <InputAdornment position="start">
+                  {getUserTypeIcon()}
+                </InputAdornment>
+              }
+            >
+              <MenuItem value="buyer">Acheteur</MenuItem>
+              <MenuItem value="farmer">Agriculteur</MenuItem>
+              <MenuItem value="delivery">Livreur</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        
+        <Grid item xs={12}>
+          <TextField
+            fullWidth
+            name="address"
+            label="Adresse"
+            multiline
+            rows={2}
+            value={formData.address}
+            onChange={handleChange}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LocationOn color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+        
+        {formData.user_type === 'farmer' && (
+          <Grid item xs={12}>
+            <TextField
+              required
+              fullWidth
+              name="farm_name"
+              label="Nom de la ferme"
+              value={formData.farm_name}
+              onChange={handleChange}
+              error={!!formErrors.farm_name}
+              helperText={formErrors.farm_name}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Agriculture color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+        )}
+        
+        {formData.user_type === 'delivery' && (
+          <Grid item xs={12}>
+            <TextField
+              required
+              fullWidth
+              name="company_name"
+              label="Nom de l'entreprise"
+              value={formData.company_name}
+              onChange={handleChange}
+              error={!!formErrors.company_name}
+              helperText={formErrors.company_name}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Business color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+        )}
+        
+        <Grid item xs={12} sm={6}>
+          <TextField
+            required
+            fullWidth
+            name="password"
+            label="Mot de passe"
+            type={showPassword ? 'text' : 'password'}
+            value={formData.password}
+            onChange={handleChange}
+            error={!!formErrors.password}
+            helperText={formErrors.password}
+            InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label="toggle password visibility"
+                    onClick={togglePasswordVisibility}
                     edge="end"
                   >
                     {showPassword ? <VisibilityOff /> : <Visibility />}
@@ -209,28 +352,24 @@ const RegisterForm = () => {
             }}
           />
         </Grid>
-
+        
         <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Confirmer le mot de passe
-          </Typography>
           <TextField
+            required
             fullWidth
-            placeholder="Confirmez votre mot de passe"
+            name="password_confirm"
+            label="Confirmer le mot de passe"
             type={showConfirmPassword ? 'text' : 'password'}
-            {...register('confirmPassword')}
-            error={!!errors.confirmPassword}
-            helperText={errors.confirmPassword?.message}
+            value={formData.password_confirm}
+            onChange={handleChange}
+            error={!!formErrors.password_confirm}
+            helperText={formErrors.password_confirm}
             InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Lock sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label="toggle confirm password visibility"
+                    onClick={toggleConfirmPasswordVisibility}
                     edge="end"
                   >
                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
@@ -240,141 +379,39 @@ const RegisterForm = () => {
             }}
           />
         </Grid>
-
-        {/* CHAMP USER_TYPE CORRIGÉ */}
-        <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Je suis *
-          </Typography>
-          <FormControl fullWidth error={!!errors.user_type}>
-            <InputLabel id="user-type-label">Sélectionnez votre rôle</InputLabel>
-            <Select
-              {...register('user_type')}
-              labelId="user-type-label"
-              label="Sélectionnez votre rôle"
-              value={userType}
-              onChange={(e) => setValue('user_type', e.target.value, { shouldValidate: true })}
-            >
-              <MenuItem value="buyer">Acheteur</MenuItem>
-              <MenuItem value="farmer">Agriculteur</MenuItem>
-              <MenuItem value="delivery">Agence de Livraison</MenuItem>
-            </Select>
-            {errors.user_type && (
-              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
-                {errors.user_type.message}
-              </Typography>
-            )}
-          </FormControl>
-        </Grid>
-
-        <Grid item xs={12} sm={6}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Téléphone
-          </Typography>
-          <TextField
-            fullWidth
-            placeholder="Entrez votre numéro de téléphone"
-            {...register('phone')}
-            error={!!errors.phone}
-            helperText={errors.phone?.message}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Phone sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-            Adresse
-          </Typography>
-          <TextField
-            fullWidth
-            placeholder="Entrez votre adresse complète"
-            multiline
-            rows={2}
-            {...register('address')}
-            error={!!errors.address}
-            helperText={errors.address?.message}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <LocationOn sx={{ color: 'text.secondary', mt: -2 }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Grid>
-
-        {userType === 'farmer' && (
-          <Grid item xs={12}>
-            <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-              Nom de la ferme (Optionnel)
-            </Typography>
-            <TextField
-              fullWidth
-              placeholder="Entrez le nom de votre ferme"
-              {...register('farmName')}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Business sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Grid>
-        )}
-
-        {(userType === 'buyer' || userType === 'delivery') && (
-          <Grid item xs={12}>
-            <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-              Nom de l'entreprise (Optionnel)
-            </Typography>
-            <TextField
-              fullWidth
-              placeholder="Entrez le nom de votre entreprise"
-              {...register('companyName')}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Business sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Grid>
-        )}
       </Grid>
-
+      
       <Button
         type="submit"
         fullWidth
         variant="contained"
+        disabled={isSubmitting}
         size="large"
-        disabled={isLoading}
-        sx={{ 
-          mt: 4,
+        sx={{
+          mt: 3,
+          mb: 2,
           py: 1.5,
           borderRadius: 2,
+          textTransform: 'none',
           fontSize: '1rem',
           fontWeight: '600',
-          textTransform: 'none',
-          background: 'linear-gradient(45deg, #3a9a3a, #2a7a2a)',
-          boxShadow: '0 4px 12px rgba(58, 154, 58, 0.3)',
+          background: 'linear-gradient(45deg, #3a9a3a 30%, #2d7a2d 90%)',
+          boxShadow: '0 3px 5px 2px rgba(58, 154, 58, .3)',
           '&:hover': {
-            background: 'linear-gradient(45deg, #2a7a2a, #1a5a1a)',
-            boxShadow: '0 6px 16px rgba(58, 154, 58, 0.4)',
+            background: 'linear-gradient(45deg, #2d7a2d 30%, #1f5a1f 90%)',
+            boxShadow: '0 3px 5px 2px rgba(45, 122, 45, .3)',
           },
           '&:disabled': {
-            background: 'grey.300'
+            background: 'grey.400',
+            boxShadow: 'none'
           }
         }}
       >
-        {isLoading ? 'Création du compte...' : 'Créer un compte'}
+        {isSubmitting ? (
+          <CircularProgress size={24} color="inherit" />
+        ) : (
+          'Créer mon compte'
+        )}
       </Button>
     </Box>
   )

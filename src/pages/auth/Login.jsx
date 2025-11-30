@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Box,
@@ -21,14 +21,57 @@ import { useAuth } from '../../contexts/AuthContext'
 import logo1 from '../../assets/logo.png';
 
 const Login = () => {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
   const from = location.state?.from?.pathname || '/'
 
+  useEffect(() => {
+    if (user && !isLoading) {
+      navigate(from, { replace: true })
+    }
+  }, [user, isLoading, navigate, from])
+
+  // Afficher un loader pendant la vérification de l'authentification
+  if (isLoading) {
+    return (
+      <Container component="main" maxWidth="sm">
+        <Box
+          sx={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 8
+          }}
+        >
+          <Paper
+            elevation={0}
+            sx={{
+              padding: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%',
+              maxWidth: 450,
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'
+            }}
+          >
+            <Typography variant="h6" component="h2" fontWeight="600" gutterBottom>
+              Vérification de la session...
+            </Typography>
+          </Paper>
+        </Box>
+      </Container>
+    )
+  }
+
+  // Si l'utilisateur est déjà connecté, ne rien afficher (sera redirigé par useEffect)
   if (user) {
-    navigate(from, { replace: true })
     return null
   }
 
@@ -104,6 +147,10 @@ const Login = () => {
                       backgroundColor: 'rgba(58, 154, 58, 0.04)'
                     }
                   }}
+                  onClick={() => {
+                    // TODO: Implémenter l'authentification Google
+                    console.log('Google login clicked')
+                  }}
                 >
                   Google
                 </Button>
@@ -122,6 +169,10 @@ const Login = () => {
                       backgroundColor: 'rgba(58, 154, 58, 0.04)'
                     }
                   }}
+                  onClick={() => {
+                    // TODO: Implémenter l'authentification Facebook
+                    console.log('Facebook login clicked')
+                  }}
                 >
                   Facebook
                 </Button>
@@ -139,6 +190,10 @@ const Login = () => {
                       borderColor: 'primary.main',
                       backgroundColor: 'rgba(58, 154, 58, 0.04)'
                     }
+                  }}
+                  onClick={() => {
+                    // TODO: Implémenter l'authentification Twitter
+                    console.log('Twitter login clicked')
                   }}
                 >
                   Twitter
@@ -164,6 +219,13 @@ const Login = () => {
               </Typography>
             </Grid>
           </Grid>
+
+          {/* Section d'information supplémentaire */}
+          <Box sx={{ mt: 3, p: 2, backgroundColor: 'grey.50', borderRadius: 2, width: '100%' }}>
+            <Typography variant="caption" color="textSecondary" display="block" textAlign="center">
+              🔒 Votre sécurité est notre priorité. Toutes les données sont cryptées.
+            </Typography>
+          </Box>
         </Paper>
       </Box>
     </Container>

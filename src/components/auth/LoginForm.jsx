@@ -1,18 +1,16 @@
 // components/auth/LoginForm.jsx
-import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   TextField,
   Button,
-  Typography,
-  Alert,
-  IconButton,
-  InputAdornment,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Alert,
+  CircularProgress,
+  IconButton,
+  InputAdornment
 } from '@mui/material'
 import {
   Visibility,
@@ -21,204 +19,246 @@ import {
   Lock
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
-
-const loginSchema = yup.object({
-  email: yup
-    .string()
-    .email('Adresse email invalide')
-    .required('L\'email est requis'),
-  password: yup
-    .string()
-    .min(1, 'Le mot de passe est requis')
-    .required('Le mot de passe est requis')
-})
 
 const LoginForm = () => {
-  const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
-  const { login, isLoading, error } = useAuth()
+  const [showPassword, setShowPassword] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { login, error, clearError } = useAuth()
   const navigate = useNavigate()
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors }
-  } = useForm({
-    resolver: yupResolver(loginSchema)
-  })
+  useEffect(() => {
+    // Charger les informations "remember me" depuis le localStorage
+    const savedEmail = localStorage.getItem('rememberedEmail')
+    if (savedEmail) {
+      setEmail(savedEmail)
+      setRememberMe(true)
+    }
 
-  const onSubmit = async (data) => {
-    const result = await login(data.email, data.password)
+    // Nettoyer les erreurs au démontage
+    return () => {
+      clearError()
+    }
+  }, [clearError])
+
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!email.trim()) {
+      errors.email = 'L\'email est requis'
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      errors.email = 'Format d\'email invalide'
+    }
+    
+    if (!password) {
+      errors.password = 'Le mot de passe est requis'
+    } else if (password.length < 6) {
+      errors.password = 'Le mot de passe doit contenir au moins 6 caractères'
+    }
+    
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+
+    // Sauvegarder l'email si "remember me" est coché
+    if (rememberMe) {
+      localStorage.setItem('rememberedEmail', email)
+    } else {
+      localStorage.removeItem('rememberedEmail')
+    }
+
+    const result = await login(email, password)
     
     if (result.success) {
-      // Redirection basée sur le user_type de Django
-      const userType = result.user?.user_type
-      
-      if (userType === 'admin') {
-        navigate('/admin')
-      } else if (userType === 'farmer') {
-        navigate('/farmer')
-      } else if (userType === 'delivery') {
-        navigate('/delivery')
-      } else {
-        navigate('/customer') // Pour 'buyer' et autres types
-      }
+      // Redirection gérée par le composant parent
+      console.log('Login successful, redirecting...')
+    } else {
+      // Les erreurs sont gérées par le AuthContext
+      console.log('Login failed:', result.message)
     }
+
+    setIsSubmitting(false)
+  }
+
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value)
+    if (formErrors.email) {
+      setFormErrors(prev => ({ ...prev, email: '' }))
+    }
+    clearError()
+  }
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value)
+    if (formErrors.password) {
+      setFormErrors(prev => ({ ...prev, password: '' }))
+    }
+    clearError()
+  }
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword)
+  }
+
+  const handleForgotPassword = () => {
+    // TODO: Implémenter la récupération de mot de passe
+    console.log('Forgot password clicked')
+    // navigate('/forgot-password')
   }
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ width: '100%' }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 2,
+            '& .MuiAlert-message': {
+              width: '100%'
+            }
+          }}
+        >
           {error}
         </Alert>
       )}
 
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-          Email Address
-        </Typography>
-        <TextField
-          fullWidth
-          placeholder="Enter your email"
-          type="email"
-          {...register('email')}
-          error={!!errors.email}
-          helperText={errors.email?.message}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Email sx={{ color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
-              '&:hover fieldset': {
-                borderColor: 'primary.main',
-              },
-            }
-          }}
-        />
-      </Box>
+      <TextField
+        margin="normal"
+        required
+        fullWidth
+        id="email"
+        label="Adresse email"
+        name="email"
+        autoComplete="email"
+        autoFocus
+        value={email}
+        onChange={handleEmailChange}
+        error={!!formErrors.email}
+        helperText={formErrors.email}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <Email color="action" />
+            </InputAdornment>
+          ),
+        }}
+        sx={{ mb: 2 }}
+      />
+      
+      <TextField
+        margin="normal"
+        required
+        fullWidth
+        name="password"
+        label="Mot de passe"
+        type={showPassword ? 'text' : 'password'}
+        id="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={handlePasswordChange}
+        error={!!formErrors.password}
+        helperText={formErrors.password}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <Lock color="action" />
+            </InputAdornment>
+          ),
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                aria-label="toggle password visibility"
+                onClick={togglePasswordVisibility}
+                edge="end"
+              >
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+        sx={{ mb: 1 }}
+      />
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="body2" fontWeight="600" sx={{ mb: 1, color: 'text.primary' }}>
-          Password
-        </Typography>
-        <TextField
-          fullWidth
-          placeholder="Enter your password"
-          type={showPassword ? 'text' : 'password'}
-          {...register('password')}
-          error={!!errors.password}
-          helperText={errors.password?.message}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Lock sx={{ color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={() => setShowPassword(!showPassword)}
-                  edge="end"
-                  sx={{ color: 'text.secondary' }}
-                >
-                  {showPassword ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2,
-              '&:hover fieldset': {
-                borderColor: 'primary.main',
-              },
-            }
-          }}
-        />
-      </Box>
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        mb: 2 
+      }}>
         <FormControlLabel
           control={
             <Checkbox 
+              value="remember" 
+              color="primary" 
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              sx={{
-                color: 'primary.main',
-                '&.Mui-checked': {
-                  color: 'primary.main',
-                },
-              }}
             />
           }
-          label={
-            <Typography variant="body2" color="text.primary">
-              Remember me
-            </Typography>
-          }
+          label="Se souvenir de moi"
         />
-        <Typography 
-          variant="body2" 
+        
+        <Button 
+          variant="text" 
+          size="small"
+          onClick={handleForgotPassword}
           sx={{ 
-            color: 'primary.main', 
-            textDecoration: 'none',
-            cursor: 'pointer',
-            fontWeight: '600',
+            color: 'text.secondary',
+            textTransform: 'none',
             '&:hover': {
-              textDecoration: 'underline'
+              color: 'primary.main',
+              backgroundColor: 'transparent'
             }
           }}
         >
-          Forgot password?
-        </Typography>
+          Mot de passe oublié ?
+        </Button>
       </Box>
-
+      
       <Button
         type="submit"
         fullWidth
         variant="contained"
+        disabled={isSubmitting}
         size="large"
-        disabled={isLoading}
-        sx={{ 
+        sx={{
+          mt: 1,
+          mb: 2,
           py: 1.5,
           borderRadius: 2,
+          textTransform: 'none',
           fontSize: '1rem',
           fontWeight: '600',
-          textTransform: 'none',
-          background: 'linear-gradient(45deg, #3a9a3a, #2a7a2a)',
-          boxShadow: '0 4px 12px rgba(58, 154, 58, 0.3)',
+          background: 'linear-gradient(45deg, #3a9a3a 30%, #2d7a2d 90%)',
+          boxShadow: '0 3px 5px 2px rgba(58, 154, 58, .3)',
           '&:hover': {
-            background: 'linear-gradient(45deg, #2a7a2a, #1a5a1a)',
-            boxShadow: '0 6px 16px rgba(58, 154, 58, 0.4)',
-            transform: 'translateY(-1px)'
+            background: 'linear-gradient(45deg, #2d7a2d 30%, #1f5a1f 90%)',
+            boxShadow: '0 3px 5px 2px rgba(45, 122, 45, .3)',
           },
           '&:disabled': {
-            background: 'grey.300'
+            background: 'grey.400',
+            boxShadow: 'none'
           }
         }}
       >
-        {isLoading ? 'Signing in...' : 'Login'}
+        {isSubmitting ? (
+          <CircularProgress size={24} color="inherit" />
+        ) : (
+          'Se connecter'
+        )}
       </Button>
-
-      {/* Comptes de test mis à jour pour Django */}
-      <Box sx={{ mt: 3, p: 2, backgroundColor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="body2" fontWeight="bold" gutterBottom color="text.primary">
-          Comptes de test Django:
-        </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Utilisez les comptes créés dans votre base Django
-        </Typography>
-        <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-          Format: email / mot de passe
-        </Typography>
-      </Box>
     </Box>
   )
 }

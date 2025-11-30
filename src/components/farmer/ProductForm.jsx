@@ -1,3 +1,4 @@
+// components/Farmer/ProductForm.js
 import React, { useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
@@ -15,25 +16,25 @@ import {
   Grid,
   Paper,
   IconButton,
-  Chip
+  Chip,
+  CircularProgress
 } from '@mui/material'
 import {
   AddPhotoAlternate,
   Delete,
-  Videocam,
   Image
 } from '@mui/icons-material'
 import { PRODUCT_CATEGORIES } from '../../utils/Constants'
 
 const productSchema = yup.object({
   name: yup.string().required('Le nom du produit est requis'),
-  category: yup.string().required('La catégorie est requise'),
+  category_id: yup.number().required('La catégorie est requise'),
   price: yup
     .number()
     .typeError('Le prix doit être un nombre')
     .positive('Le prix doit être positif')
     .required('Le prix est requis'),
-  quantity: yup
+  stock: yup
     .number()
     .typeError('La quantité doit être un nombre')
     .positive('La quantité doit être positive')
@@ -44,44 +45,53 @@ const productSchema = yup.object({
 })
 
 const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
-  const [mediaFiles, setMediaFiles] = useState(initialData?.media || [])
+  const [mediaFiles, setMediaFiles] = useState([])
   const [mediaError, setMediaError] = useState('')
   const fileInputRef = useRef(null)
-  const videoInputRef = useRef(null)
 
   const {
     register,
     handleSubmit,
-    formState: { errors }
+    formState: { errors },
+    setValue
   } = useForm({
     resolver: yupResolver(productSchema),
     defaultValues: initialData || {
-      unit: 'kg'
+      unit: 'kg',
+      available: true
     }
   })
 
-  const handleMediaUpload = (event, type) => {
+  // Initialiser les valeurs si modification
+  React.useEffect(() => {
+    if (initialData) {
+      Object.keys(initialData).forEach(key => {
+        setValue(key, initialData[key])
+      })
+    }
+  }, [initialData, setValue])
+
+  const handleMediaUpload = (event) => {
     const files = Array.from(event.target.files)
     
     // Vérifier le nombre total de médias
     if (files.length + mediaFiles.length > 10) {
-      setMediaError('Maximum 10 médias autorisés (photos + vidéos)')
+      setMediaError('Maximum 10 images autorisées')
       return
     }
 
     // Vérifier la taille des fichiers
-    const maxSize = type === 'video' ? 50 * 1024 * 1024 : 5 * 1024 * 1024 // 50MB pour vidéos, 5MB pour images
+    const maxSize = 5 * 1024 * 1024 // 5MB pour images
     const oversizedFiles = files.filter(file => file.size > maxSize)
     
     if (oversizedFiles.length > 0) {
-      setMediaError(`Fichier(s) trop volumineux. Maximum: ${type === 'video' ? '50MB' : '5MB'} par fichier`)
+      setMediaError('Fichier(s) trop volumineux. Maximum: 5MB par fichier')
       return
     }
 
     const newMedia = files.map(file => ({
       file,
-      type,
-      preview: type === 'image' ? URL.createObjectURL(file) : null,
+      preview: URL.createObjectURL(file),
       name: file.name,
       size: file.size
     }))
@@ -98,9 +108,9 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
     setMediaFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  const handleFormSubmit = (data) => {
-    if (mediaFiles.length === 0) {
-      setMediaError('Au moins une photo ou vidéo est requise')
+  const handleFormSubmit = async (data) => {
+    if (mediaFiles.length === 0 && !initialData?.images?.length) {
+      setMediaError('Au moins une photo est requise')
       return
     }
 
@@ -108,16 +118,21 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
     
     // Ajouter les données du formulaire
     Object.keys(data).forEach(key => {
-      formData.append(key, data[key])
+      if (key !== 'images') {
+        formData.append(key, data[key])
+      }
     })
 
-    // Ajouter les médias
+    // Ajouter les nouvelles images
     mediaFiles.forEach(media => {
-      formData.append('media', media.file)
-      formData.append('media_types', media.type)
+      formData.append('images', media.file)
     })
 
-    onSubmit(formData)
+    try {
+      await onSubmit(formData)
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    }
   }
 
   const getFileSize = (bytes) => {
@@ -147,21 +162,24 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.category}>
+            <FormControl fullWidth error={!!errors.category_id}>
               <InputLabel>Catégorie</InputLabel>
               <Select
-                {...register('category')}
+                {...register('category_id')}
                 label="Catégorie"
               >
-                {PRODUCT_CATEGORIES.map(category => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
+                {/* Les catégories seront chargées depuis l'API */}
+                <MenuItem value={1}>Légumes</MenuItem>
+                <MenuItem value={2}>Fruits</MenuItem>
+                <MenuItem value={3}>Céréales</MenuItem>
+                <MenuItem value={4}>Tubercules</MenuItem>
+                <MenuItem value={5}>Épices</MenuItem>
+                <MenuItem value={6}>Légumineuses</MenuItem>
+                <MenuItem value={7}>Produits animaux</MenuItem>
               </Select>
-              {errors.category && (
+              {errors.category_id && (
                 <Typography variant="caption" color="error">
-                  {errors.category.message}
+                  {errors.category_id.message}
                 </Typography>
               )}
             </FormControl>
@@ -181,11 +199,11 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
           <Grid item xs={12} sm={4}>
             <TextField
               fullWidth
-              label="Quantité"
+              label="Quantité en stock"
               type="number"
-              {...register('quantity')}
-              error={!!errors.quantity}
-              helperText={errors.quantity?.message}
+              {...register('stock')}
+              error={!!errors.stock}
+              helperText={errors.stock?.message}
             />
           </Grid>
 
@@ -197,12 +215,10 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
                 label="Unité"
               >
                 <MenuItem value="kg">Kilogramme</MenuItem>
-                <MenuItem value="g">Gramme</MenuItem>
-                <MenuItem value="l">Litre</MenuItem>
-                <MenuItem value="pièce">Pièce</MenuItem>
-                <MenuItem value="sachet">Sachet</MenuItem>
+                <MenuItem value="piece">Pièce</MenuItem>
+                <MenuItem value="sac">Sac</MenuItem>
+                <MenuItem value="litre">Litre</MenuItem>
                 <MenuItem value="botte">Botte</MenuItem>
-                <MenuItem value="carton">Carton</MenuItem>
               </Select>
               {errors.unit && (
                 <Typography variant="caption" color="error">
@@ -227,7 +243,7 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
 
           <Grid item xs={12}>
             <Typography variant="h6" gutterBottom>
-              Photos et Vidéos du Produit
+              Photos du Produit
             </Typography>
             
             {mediaError && (
@@ -248,32 +264,44 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
                   hidden
                   multiple
                   accept="image/*"
-                  onChange={(e) => handleMediaUpload(e, 'image')}
+                  onChange={handleMediaUpload}
                   ref={fileInputRef}
-                />
-              </Button>
-              
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<Videocam />}
-              >
-                Ajouter une Vidéo
-                <input
-                  type="file"
-                  hidden
-                  accept="video/*"
-                  onChange={(e) => handleMediaUpload(e, 'video')}
-                  ref={videoInputRef}
                 />
               </Button>
             </Box>
 
             <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 2 }}>
-              📸 Maximum 10 médias (photos + vidéos) • 📷 Photos: max 5MB • 🎥 Vidéos: max 50MB
+              📸 Maximum 10 images • 📷 Taille max: 5MB par image
             </Typography>
 
-            {/* Aperçu des médias */}
+            {/* Images existantes (pour la modification) */}
+            {initialData?.images && initialData.images.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Images actuelles:
+                </Typography>
+                <Grid container spacing={2}>
+                  {initialData.images.map((image, index) => (
+                    <Grid item xs={6} sm={4} md={3} key={index}>
+                      <Box sx={{ position: 'relative' }}>
+                        <img
+                          src={image.image}
+                          alt={`Produit ${index + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '120px',
+                            objectFit: 'cover',
+                            borderRadius: 8
+                          }}
+                        />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            )}
+
+            {/* Aperçu des nouvelles images */}
             {mediaFiles.length > 0 && (
               <Grid container spacing={2}>
                 {mediaFiles.map((media, index) => (
@@ -290,51 +318,24 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
                         }
                       }}
                     >
-                      {media.type === 'image' ? (
-                        <img
-                          src={media.preview}
-                          alt={`Preview ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '120px',
-                            objectFit: 'cover',
-                            display: 'block'
-                          }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: '100%',
-                            height: '120px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: 'grey.100',
-                            flexDirection: 'column',
-                            gap: 1
-                          }}
-                        >
-                          <Videocam sx={{ fontSize: 40, color: 'text.secondary' }} />
-                          <Typography variant="caption" textAlign="center" px={1}>
-                            {media.name}
-                          </Typography>
-                        </Box>
-                      )}
+                      <img
+                        src={media.preview}
+                        alt={`Preview ${index + 1}`}
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          objectFit: 'cover',
+                          display: 'block'
+                        }}
+                      />
                       
                       <Box
                         sx={{
                           position: 'absolute',
                           top: 4,
                           right: 4,
-                          display: 'flex',
-                          gap: 0.5
                         }}
                       >
-                        <Chip
-                          label={media.type === 'image' ? '📷 Photo' : '🎥 Vidéo'}
-                          size="small"
-                          color={media.type === 'image' ? 'primary' : 'secondary'}
-                        />
                         <IconButton
                           size="small"
                           sx={{
@@ -376,12 +377,11 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
             )}
 
             {/* Statistiques des médias */}
-            {mediaFiles.length > 0 && (
+            {(mediaFiles.length > 0 || initialData?.images?.length > 0) && (
               <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
                 <Typography variant="body2">
-                  📊 {mediaFiles.length} média(s) sélectionné(s) • 
-                  📷 {mediaFiles.filter(m => m.type === 'image').length} photo(s) • 
-                  🎥 {mediaFiles.filter(m => m.type === 'video').length} vidéo(s)
+                  📊 {mediaFiles.length} nouvelle(s) image(s) sélectionnée(s) • 
+                  📷 {initialData?.images?.length || 0} image(s) existante(s)
                 </Typography>
               </Box>
             )}
@@ -395,8 +395,8 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
           <Button
             type="submit"
             variant="contained"
-            disabled={loading || mediaFiles.length === 0}
-            startIcon={<AddPhotoAlternate />}
+            disabled={loading || (mediaFiles.length === 0 && !initialData)}
+            startIcon={loading ? <CircularProgress size={20} /> : <AddPhotoAlternate />}
           >
             {loading ? 'Enregistrement...' : initialData ? 'Modifier le Produit' : 'Publier le Produit'}
           </Button>

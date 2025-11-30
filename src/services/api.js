@@ -1,9 +1,7 @@
-// src/api/index.js - CORRIGÉ AVEC PASSWORD_CONFIRM
+// src/services/api.js
 import axios from 'axios'
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://terrabia-mobile.onrender.com/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://terrabia-mobile.onrender.com/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -43,30 +41,30 @@ api.interceptors.response.use(
   }
 )
 
-// 🔐 API d'authentification - CORRIGÉE AVEC PASSWORD_CONFIRM
+// 🔐 API d'authentification - CORRIGÉE
 export const authAPI = {
-  // Authentification JWT - Format Django
+  // Authentification JWT - Format Django SimpleJWT
   login: (credentials) => {
     return api.post('/token/', {
-      username: credentials.email,
+      username: credentials.email, // SimpleJWT utilise 'username'
       password: credentials.password
     })
   },
   
   refreshToken: (refreshToken) => api.post('/token/refresh/', { refresh: refreshToken }),
   
-  // Inscription - AVEC PASSWORD_CONFIRM AJOUTÉ
+  // Inscription - Format adapté pour votre backend
   register: (userData) => {
     const djangoUserData = {
-      // Champs obligatoires d'AbstractUser
-      username: userData.email,
+      // Champs obligatoires pour SimpleJWT/Django
+      username: userData.email, // Utiliser l'email comme username
       email: userData.email,
       password: userData.password,
-      password_confirm: userData.password, // ← CHAMP AJOUTÉ ICI
+      password_confirm: userData.password,
+      
+      // Champs personnalisés
       first_name: userData.first_name,
       last_name: userData.last_name,
-      
-      // Champs personnalisés de votre modèle User
       user_type: userData.user_type,
       phone_number: userData.phone,
       address: userData.address,
@@ -76,8 +74,7 @@ export const authAPI = {
       company_name: userData.company_name || ''
     }
     
-    console.log('Données envoyées à Django:', djangoUserData) // Pour debug
-    
+    console.log('Données envoyées à Django:', djangoUserData)
     return api.post('/auth/register/', djangoUserData)
   },
   
@@ -100,45 +97,50 @@ export const authAPI = {
 export const productsAPI = {
   getAll: (params) => api.get('/products/products/', { params }),
   getById: (id) => api.get(`/products/products/${id}/`),
-  create: (productData) => api.post('/products/products/', productData),
-  update: (id, productData) => api.put(`/products/products/${id}/`, productData),
+  create: (productData) => {
+    const config = productData instanceof FormData 
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : {}
+    return api.post('/products/products/', productData, config)
+  },
+  update: (id, productData) => {
+    const config = productData instanceof FormData 
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : {}
+    return api.patch(`/products/products/${id}/`, productData, config)
+  },
   delete: (id) => api.delete(`/products/products/${id}/`),
   getCategories: () => api.get('/products/categories/'),
   search: (query, params = {}) => api.get('/products/products/', { 
     params: { search: query, ...params } 
   }),
+  getMyProducts: () => api.get('/products/my-products/'),
+  toggleFavorite: (productId) => api.post(`/products/products/${productId}/toggle_favorite/`),
+  getFavorites: () => api.get('/products/favorites/'),
 }
 
 export const cartAPI = {
   getCart: () => api.get('/orders/cart/'),
   addToCart: (productData) => api.post('/orders/cart/add/', productData),
-  updateCartItem: (itemId, quantity) => api.put(`/orders/cart/items/${itemId}/`, { quantity }),
+  updateCartItem: (itemId, quantity) => api.patch(`/orders/cart/items/${itemId}/`, { quantity }),
   removeFromCart: (itemId) => api.delete(`/orders/cart/items/${itemId}/remove/`),
+  clearCart: () => api.delete('/orders/cart/clear/'),
 }
 
 export const ordersAPI = {
   getAll: (params) => api.get('/orders/orders/', { params }),
   getById: (id) => api.get(`/orders/orders/${id}/`),
   create: (orderData) => api.post('/orders/orders/', orderData),
-  update: (id, orderData) => api.put(`/orders/orders/${id}/`, orderData),
+  updateStatus: (id, status) => api.patch(`/orders/orders/${id}/`, { status }),
   getMyOrders: () => api.get('/orders/orders/history/'),
-}
-
-export const chatAPI = {
-  getConversations: () => api.get('/chat/conversations/'),
-  getConversation: (conversationId) => api.get(`/chat/conversations/${conversationId}/`),
-  createConversation: (participantData) => api.post('/chat/conversations/', participantData),
-  getMessages: (conversationId) => api.get(`/chat/conversations/${conversationId}/messages/`),
-  sendMessage: (conversationId, message) => api.post(`/chat/conversations/${conversationId}/messages/`, { 
-    content: message 
-  }),
+  getFarmerOrders: () => api.get('/orders/farmer-orders/'),
+  cancelOrder: (id) => api.post(`/orders/orders/${id}/cancel/`),
 }
 
 export const usersAPI = {
   getUsers: (params) => api.get('/auth/users/', { params }),
   getUser: (userId) => api.get(`/auth/users/${userId}/`),
-  getCurrentUser: () => api.get('/auth/users/me/'),
-  updateUser: (userData) => api.put('/auth/users/me/', userData),
+  updateUser: (userData) => api.patch('/auth/users/me/', userData),
 }
 
 // Utility functions

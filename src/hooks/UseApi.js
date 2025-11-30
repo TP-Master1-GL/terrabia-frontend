@@ -1,32 +1,34 @@
-import { useState, useEffect } from 'react'
+// hooks/useAuth.js
+import { useAuth } from '../contexts/AuthContext'
 
-function useApi(apiFunction, immediate = true) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-
-  const execute = async (...args) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await apiFunction(...args)
-      setData(response.data)
-      return response.data
-    } catch (err) {
-      setError(err.response?.data || err.message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
+export const useAuthHook = () => {
+  const auth = useAuth()
+  
+  const loginUser = async (email, password) => {
+    return await auth.login(email, password)
   }
 
-  useEffect(() => {
-    if (immediate) {
-      execute()
-    }
-  }, [])
+  const registerUser = async (userData) => {
+    return await auth.register(userData)
+  }
 
-  return { data, loading, error, execute }
+  const logoutUser = () => {
+    auth.logout()
+  }
+
+  const updateUserProfile = (userData) => {
+    auth.updateUser(userData)
+  }
+
+  return {
+    user: auth.user,
+    isLoading: auth.isLoading,
+    error: auth.error,
+    isAuthenticated: auth.isAuthenticated,
+    login: loginUser,
+    register: registerUser,
+    logout: logoutUser,
+    updateUser: updateUserProfile,
+    clearError: auth.clearError
+  }
 }
-
-export default useApi

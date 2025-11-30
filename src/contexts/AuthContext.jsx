@@ -1,6 +1,7 @@
 // contexts/AuthContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react'
 import { authAPI, apiUtils } from '../services/api'
+import apiService from '../services/apiService'
 
 const AuthContext = createContext()
 
@@ -23,14 +24,19 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     const token = localStorage.getItem('token')
-    if (token) {
+    if (token && apiService.isAuthenticated()) {
       try {
-        // Pour l'instant, on vérifie juste si le token existe
-        // Plus tard, vous pourrez vérifier sa validité
-        console.log('Token exists, user is considered logged in')
+        // Récupérer les vraies infos utilisateur depuis l'API
+        const userData = await apiService.getCurrentUser()
+        console.log('User data from API:', userData)
+        setUser(userData)
+        localStorage.setItem('terrabia_user', JSON.stringify(userData))
       } catch (error) {
         console.error('Auth check failed:', error)
-        logout()
+        // Si le token est invalide, déconnecter l'utilisateur
+        if (error.response?.status === 401) {
+          logout()
+        }
       }
     }
     setIsLoading(false)
@@ -43,43 +49,26 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Attempting login with:', { email, password })
       
-      const response = await authAPI.login({ email, password })
-      console.log('Login response:', response.data)
+      // Utiliser le service API amélioré
+      const { user: userData, token } = await apiService.login({ email, password })
+      console.log('Login successful:', userData)
       
-      const { access, refresh } = response.data
+      setUser(userData)
+      localStorage.setItem('terrabia_user', JSON.stringify(userData))
       
-      // Sauvegarder les tokens
-      authAPI.setTokens(access, refresh)
-      
-      // Créer un objet utilisateur temporaire
-      // Vous devrez récupérer les vraies infos depuis votre API
-      const tempUser = {
-        id: 1,
-        first_name: 'Utilisateur',
-        last_name: 'Test',
-        email: email,
-        user_type: 'buyer'
-      }
-      
-      setUser(tempUser)
-      localStorage.setItem('terrabia_user', JSON.stringify(tempUser))
-      
-      return { success: true, user: tempUser }
+      return { success: true, user: userData }
     } catch (error) {
       console.error('Login error:', error)
-      const errorData = apiUtils.handleError(error)
       
       let errorMessage = 'Échec de la connexion'
       
       // Gestion spécifique des erreurs Django
-      if (errorData.detail) {
-        errorMessage = errorData.detail
-      } else if (errorData.non_field_errors) {
-        errorMessage = errorData.non_field_errors[0]
-      } else if (errorData.username) {
-        errorMessage = `Nom d'utilisateur: ${errorData.username[0]}`
-      } else if (errorData.password) {
-        errorMessage = `Mot de passe: ${errorData.password[0]}`
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.response?.data?.non_field_errors) {
+        errorMessage = error.response.data.non_field_errors[0]
       }
       
       setError(errorMessage)
@@ -96,46 +85,32 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Attempting registration with:', userData)
       
-      const response = await authAPI.register(userData)
-      console.log('Register response:', response.data)
+      // Utiliser le service API amélioré
+      const { user: newUser, token } = await apiService.register(userData)
+      console.log('Register successful:', newUser)
       
-      // Si l'inscription réussit
-      if (response.data.access) {
-        // Connexion automatique si token reçu
-        const { access, refresh } = response.data
-        authAPI.setTokens(access, refresh)
-        
-        const newUser = {
-          ...userData,
-          id: response.data.user?.id || Date.now()
-        }
-        
-        setUser(newUser)
-        localStorage.setItem('terrabia_user', JSON.stringify(newUser))
-        
-        return { success: true, user: newUser }
-      } else {
-        // Redirection vers login si pas de token
-        return { success: true, requiresLogin: true }
-      }
+      setUser(newUser)
+      localStorage.setItem('terrabia_user', JSON.stringify(newUser))
+      
+      return { success: true, user: newUser }
     } catch (error) {
       console.error('Register error:', error)
-      const errorData = apiUtils.handleError(error)
       
       let errorMessage = 'Échec de l\'inscription'
       
       // Gestion spécifique des erreurs Django
-      if (errorData.email) {
-        errorMessage = `Email: ${errorData.email[0]}`
-      } else if (errorData.password) {
-        errorMessage = `Mot de passe: ${errorData.password[0]}`
-      } else if (errorData.non_field_errors) {
-        errorMessage = errorData.non_field_errors[0]
-      } else if (errorData.detail) {
-        errorMessage = errorData.detail
-      } else if (typeof errorData === 'object') {
-        // Si c'est un objet avec plusieurs erreurs
-        errorMessage = Object.values(errorData).flat().join(', ')
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.response?.data?.email) {
+        errorMessage = `Email: ${error.response.data.email[0]}`
+      } else if (error.response?.data?.password) {
+        errorMessage = `Mot de passe: ${error.response.data.password[0]}`
+      } else if (error.response?.data?.username) {
+        errorMessage = `Nom d'utilisateur: ${error.response.data.username[0]}`
+      } else if (error.response?.data?.non_field_errors) {
+        errorMessage = error.response.data.non_field_errors[0]
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
       }
       
       setError(errorMessage)
@@ -145,10 +120,20 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const updateUser = (userData) => {
+    const updatedUser = { ...user, ...userData }
+    setUser(updatedUser)
+    localStorage.setItem('terrabia_user', JSON.stringify(updatedUser))
+  }
+
   const logout = () => {
-    authAPI.clearTokens()
+    apiService.logout()
     localStorage.removeItem('terrabia_user')
     setUser(null)
+    setError(null)
+  }
+
+  const clearError = () => {
     setError(null)
   }
 
@@ -159,7 +144,9 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!user
+    updateUser,
+    clearError,
+    isAuthenticated: !!user && !!localStorage.getItem('token')
   }
 
   return (
