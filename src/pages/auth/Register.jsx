@@ -16,6 +16,7 @@ import {
 } from '@mui/icons-material'
 import RegisterForm from '../../components/auth/RegisterForm'
 import { useAuth } from '../../contexts/AuthContext'
+import logo1 from '../../assets/logo.png';
 
 const Register = () => {
   const { user } = useAuth()
@@ -55,13 +56,14 @@ const Register = () => {
           <Box sx={{ textAlign: 'center', mb: 4, width: '100%' }}>
             <Box sx={{ mb: 3 }}>
               <img 
-                src="/src/assets/logo.png" 
-                alt="TERRABIA" 
-                style={{ 
-                  height: '170px', 
-                  marginBottom: '16px',
-                  borderRadius: '12px',
-                }} 
+                              src={logo1} 
+                              alt="TERRABIA" 
+                              style={{ 
+                                height: '170px', 
+                                marginBottom: '16px',
+                                borderRadius: '12px',
+                                
+                              }} 
               />
             <Typography variant="h6" component="h2" fontWeight="600" gutterBottom>
               Create your account

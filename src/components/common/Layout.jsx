@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
 import './Layout.css'
+import logo1 from '../../assets/logo.png';
 
 const Layout = () => {
   const { user, logout, isAuthenticated } = useAuth()
@@ -179,13 +180,15 @@ const Layout = () => {
       <AppBar position="fixed" className={`app-bar ${scrolled ? 'scrolled' : ''}`}>
         <Toolbar>
           <Box className="logo-section">
-            <img 
-              src="/src/assets/logo.png" 
-              alt="TERRABIA" 
-              className="logo"
-              onError={(e) => {
-                e.target.src = '/logo.png'
-              }}
+           <img 
+                           src={logo1} 
+                           alt="TERRABIA" 
+                           style={{ 
+                             height: '170px', 
+                             marginBottom: '16px',
+                             borderRadius: '12px',
+                             
+                           }} 
             />
           </Box>
 
@@ -335,18 +338,17 @@ const Layout = () => {
         <Box className="footer-content">
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }} className="fade-in-up">
             <img 
-              src="/src/assets/logo.png" 
-              alt="TERRABIA" 
-              style={{ 
-                height: '200px', 
-                marginRight: '12px',
-                borderRadius: '8px',
-                filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))'
-              }}
-              onError={(e) => {
-                e.target.src = '/logo.png'
-              }}
-            />
+                            src={logo1} 
+                            alt="TERRABIA" 
+                            style={{ 
+                                 height: '200px', 
+                                  marginRight: '12px',
+                                  borderRadius: '8px',
+                                  filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))'
+                              
+                            }} 
+                          />
+            
           </Box>
           <Typography variant="body2" className="footer-description fade-in-up" style={{ animationDelay: '0.1s' }}>
             Votre marché agricole en ligne - Produits frais du Cameroun et du monde

@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material'
 import LoginForm from '../../components/auth/LoginForm'
 import { useAuth } from '../../contexts/AuthContext'
+import logo1 from '../../assets/logo.png';
 
 const Login = () => {
   const { user } = useAuth()
@@ -60,7 +61,7 @@ const Login = () => {
           <Box sx={{ textAlign: 'center', mb: 4, width: '100%' }}>
             <Box sx={{ mb: 3 }}>
               <img 
-                src="/src/assets/logo.png" 
+                src={logo1} 
                 alt="TERRABIA" 
                 style={{ 
                   height: '170px', 
