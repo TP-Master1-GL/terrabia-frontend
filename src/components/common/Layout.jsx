@@ -177,7 +177,7 @@ const Layout = () => {
 
   return (
     <div className="layout">
-      <AppBar position="fixed" className={`app-bar ${scrolled ? 'scrolled' : ''}`}>
+      <AppBar position="relative" className={`app-bar ${scrolled ? 'scrolled' : ''}`}>
         <Toolbar>
           <Box className="logo-section">
            <img 
