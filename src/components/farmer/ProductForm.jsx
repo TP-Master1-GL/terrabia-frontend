@@ -1,5 +1,5 @@
 // components/Farmer/ProductForm.js
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { yupResolver } from '@hookform/resolvers/yup'
 import * as yup from 'yup'
@@ -16,57 +16,85 @@ import {
   Grid,
   Paper,
   IconButton,
-  Chip,
-  CircularProgress
+  CircularProgress,
+  FormControlLabel,
+  Switch
 } from '@mui/material'
 import {
   AddPhotoAlternate,
   Delete,
   Image
 } from '@mui/icons-material'
-import { PRODUCT_CATEGORIES } from '../../utils/Constants'
+import { productsAPI } from '../../services/api'
 
+// Schéma de validation simplifié
 const productSchema = yup.object({
   name: yup.string().required('Le nom du produit est requis'),
-  category_id: yup.number().required('La catégorie est requise'),
-  price: yup
-    .number()
-    .typeError('Le prix doit être un nombre')
-    .positive('Le prix doit être positif')
-    .required('Le prix est requis'),
-  stock: yup
-    .number()
-    .typeError('La quantité doit être un nombre')
-    .positive('La quantité doit être positive')
-    .integer('La quantité doit être un nombre entier')
-    .required('La quantité est requise'),
+  category: yup.number().required('La catégorie est requise'),
+  price: yup.number().positive('Le prix doit être positif').required('Le prix est requis'),
+  stock: yup.number().positive('La quantité doit être positive').integer('La quantité doit être un nombre entier').required('La quantité est requise'),
   unit: yup.string().required('L\'unité est requise'),
-  description: yup.string().required('La description est requise')
+  description: yup.string().required('La description est requise'),
 })
 
 const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
   const [mediaFiles, setMediaFiles] = useState([])
   const [mediaError, setMediaError] = useState('')
+  const [categories, setCategories] = useState([])
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
   const fileInputRef = useRef(null)
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    setValue
+    setValue,
   } = useForm({
     resolver: yupResolver(productSchema),
     defaultValues: initialData || {
       unit: 'kg',
-      available: true
+      available: true,
     }
   })
 
+  // Charger les catégories
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        setCategoriesLoading(true)
+        const response = await productsAPI.getCategories()
+        if (response.data) {
+          setCategories(response.data)
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error)
+        // Catégories par défaut en cas d'erreur
+        setCategories([
+          { id: 1, name: 'Légumes' },
+          { id: 2, name: 'Fruits' },
+          { id: 3, name: 'Céréales' },
+          { id: 4, name: 'Tubercules' },
+          { id: 5, name: 'Épices' },
+          { id: 6, name: 'Légumineuses' },
+          { id: 7, name: 'Produits animaux' }
+        ])
+      } finally {
+        setCategoriesLoading(false)
+      }
+    }
+    
+    loadCategories()
+  }, [])
+
   // Initialiser les valeurs si modification
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialData) {
       Object.keys(initialData).forEach(key => {
-        setValue(key, initialData[key])
+        if (key === 'category' && initialData.category) {
+          setValue('category', initialData.category.id)
+        } else {
+          setValue(key, initialData[key])
+        }
       })
     }
   }, [initialData, setValue])
@@ -74,14 +102,12 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
   const handleMediaUpload = (event) => {
     const files = Array.from(event.target.files)
     
-    // Vérifier le nombre total de médias
     if (files.length + mediaFiles.length > 10) {
       setMediaError('Maximum 10 images autorisées')
       return
     }
 
-    // Vérifier la taille des fichiers
-    const maxSize = 5 * 1024 * 1024 // 5MB pour images
+    const maxSize = 5 * 1024 * 1024
     const oversizedFiles = files.filter(file => file.size > maxSize)
     
     if (oversizedFiles.length > 0) {
@@ -93,7 +119,6 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
       file,
       preview: URL.createObjectURL(file),
       name: file.name,
-      size: file.size
     }))
 
     setMediaFiles(prev => [...prev, ...newMedia])
@@ -109,6 +134,8 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
   }
 
   const handleFormSubmit = async (data) => {
+    console.log('Données du formulaire:', data)
+    
     if (mediaFiles.length === 0 && !initialData?.images?.length) {
       setMediaError('Au moins une photo est requise')
       return
@@ -116,31 +143,31 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
 
     const formData = new FormData()
     
-    // Ajouter les données du formulaire
-    Object.keys(data).forEach(key => {
-      if (key !== 'images') {
-        formData.append(key, data[key])
-      }
-    })
+    // Ajouter les données de base
+    formData.append('name', data.name)
+    formData.append('category', data.category)
+    formData.append('price', data.price)
+    formData.append('stock', data.stock)
+    formData.append('unit', data.unit)
+    formData.append('description', data.description)
+    formData.append('available', 'true') // Toujours disponible lors de la création
 
-    // Ajouter les nouvelles images
+    // Ajouter les images
     mediaFiles.forEach(media => {
       formData.append('images', media.file)
     })
+
+    console.log('FormData créé:')
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value)
+    }
 
     try {
       await onSubmit(formData)
     } catch (error) {
       console.error('Error submitting form:', error)
+      throw error
     }
-  }
-
-  const getFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   return (
@@ -162,24 +189,23 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.category_id}>
+            <FormControl fullWidth error={!!errors.category}>
               <InputLabel>Catégorie</InputLabel>
               <Select
-                {...register('category_id')}
+                {...register('category')}
                 label="Catégorie"
+                defaultValue=""
               >
-                {/* Les catégories seront chargées depuis l'API */}
-                <MenuItem value={1}>Légumes</MenuItem>
-                <MenuItem value={2}>Fruits</MenuItem>
-                <MenuItem value={3}>Céréales</MenuItem>
-                <MenuItem value={4}>Tubercules</MenuItem>
-                <MenuItem value={5}>Épices</MenuItem>
-                <MenuItem value={6}>Légumineuses</MenuItem>
-                <MenuItem value={7}>Produits animaux</MenuItem>
+                <MenuItem value="">Sélectionnez une catégorie</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category.id}>
+                    {category.name}
+                  </MenuItem>
+                ))}
               </Select>
-              {errors.category_id && (
+              {errors.category && (
                 <Typography variant="caption" color="error">
-                  {errors.category_id.message}
+                  {errors.category.message}
                 </Typography>
               )}
             </FormControl>
@@ -190,6 +216,7 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
               fullWidth
               label="Prix (FCFA)"
               type="number"
+              inputProps={{ step: "0.01", min: "0" }}
               {...register('price')}
               error={!!errors.price}
               helperText={errors.price?.message}
@@ -201,6 +228,7 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
               fullWidth
               label="Quantité en stock"
               type="number"
+              inputProps={{ min: "0" }}
               {...register('stock')}
               error={!!errors.stock}
               helperText={errors.stock?.message}
@@ -213,6 +241,7 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
               <Select
                 {...register('unit')}
                 label="Unité"
+                defaultValue="kg"
               >
                 <MenuItem value="kg">Kilogramme</MenuItem>
                 <MenuItem value="piece">Pièce</MenuItem>
@@ -237,7 +266,6 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
               {...register('description')}
               error={!!errors.description}
               helperText={errors.description?.message}
-              placeholder="Décrivez votre produit en détail : qualité, fraîcheur, méthode de culture, etc."
             />
           </Grid>
 
@@ -252,72 +280,28 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
               </Alert>
             )}
 
-            <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<Image />}
-              >
-                Ajouter des Photos
-                <input
-                  type="file"
-                  hidden
-                  multiple
-                  accept="image/*"
-                  onChange={handleMediaUpload}
-                  ref={fileInputRef}
-                />
-              </Button>
-            </Box>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<Image />}
+              sx={{ mb: 2 }}
+            >
+              Ajouter des Photos
+              <input
+                type="file"
+                hidden
+                multiple
+                accept="image/*"
+                onChange={handleMediaUpload}
+                ref={fileInputRef}
+              />
+            </Button>
 
-            <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 2 }}>
-              📸 Maximum 10 images • 📷 Taille max: 5MB par image
-            </Typography>
-
-            {/* Images existantes (pour la modification) */}
-            {initialData?.images && initialData.images.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Images actuelles:
-                </Typography>
-                <Grid container spacing={2}>
-                  {initialData.images.map((image, index) => (
-                    <Grid item xs={6} sm={4} md={3} key={index}>
-                      <Box sx={{ position: 'relative' }}>
-                        <img
-                          src={image.image}
-                          alt={`Produit ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '120px',
-                            objectFit: 'cover',
-                            borderRadius: 8
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
-            )}
-
-            {/* Aperçu des nouvelles images */}
             {mediaFiles.length > 0 && (
               <Grid container spacing={2}>
                 {mediaFiles.map((media, index) => (
                   <Grid item xs={6} sm={4} md={3} key={index}>
-                    <Box 
-                      sx={{ 
-                        position: 'relative',
-                        border: '2px solid',
-                        borderColor: 'divider',
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        '&:hover': {
-                          borderColor: 'primary.main'
-                        }
-                      }}
-                    >
+                    <Box sx={{ position: 'relative' }}>
                       <img
                         src={media.preview}
                         alt={`Preview ${index + 1}`}
@@ -325,80 +309,41 @@ const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
                           width: '100%',
                           height: '120px',
                           objectFit: 'cover',
-                          display: 'block'
+                          borderRadius: 8
                         }}
                       />
-                      
-                      <Box
+                      <IconButton
+                        size="small"
                         sx={{
                           position: 'absolute',
                           top: 4,
                           right: 4,
-                        }}
-                      >
-                        <IconButton
-                          size="small"
-                          sx={{
-                            backgroundColor: 'error.main',
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: 'error.dark'
-                            }
-                          }}
-                          onClick={() => removeMedia(index)}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Box>
-                      
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          backgroundColor: 'error.main',
                           color: 'white',
-                          px: 1,
-                          py: 0.5
                         }}
+                        onClick={() => removeMedia(index)}
                       >
-                        <Typography variant="caption" noWrap>
-                          {media.name}
-                        </Typography>
-                        <Typography variant="caption" display="block">
-                          {getFileSize(media.size)}
-                        </Typography>
-                      </Box>
+                        <Delete fontSize="small" />
+                      </IconButton>
                     </Box>
                   </Grid>
                 ))}
               </Grid>
             )}
-
-            {/* Statistiques des médias */}
-            {(mediaFiles.length > 0 || initialData?.images?.length > 0) && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
-                <Typography variant="body2">
-                  📊 {mediaFiles.length} nouvelle(s) image(s) sélectionnée(s) • 
-                  📷 {initialData?.images?.length || 0} image(s) existante(s)
-                </Typography>
-              </Box>
-            )}
           </Grid>
         </Grid>
 
         <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-          <Button variant="outlined" onClick={onCancel} disabled={loading}>
+          <Button variant="outlined" onClick={onCancel}>
             Annuler
           </Button>
           <Button
             type="submit"
             variant="contained"
-            disabled={loading || (mediaFiles.length === 0 && !initialData)}
+            disabled={loading}
             startIcon={loading ? <CircularProgress size={20} /> : <AddPhotoAlternate />}
           >
-            {loading ? 'Enregistrement...' : initialData ? 'Modifier le Produit' : 'Publier le Produit'}
+            {loading ? 'Enregistrement...' : initialData ? 'Modifier' : 'Publier'}
           </Button>
         </Box>
       </Box>

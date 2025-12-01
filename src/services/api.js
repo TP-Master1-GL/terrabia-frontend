@@ -92,32 +92,80 @@ export const authAPI = {
     localStorage.removeItem('refresh_token')
   }
 }
-
-// Les autres APIs restent inchangées...
 export const productsAPI = {
+  // Récupérer tous les produits (public)
   getAll: (params) => api.get('/products/products/', { params }),
+  
+  // Récupérer un produit spécifique
   getById: (id) => api.get(`/products/products/${id}/`),
+  
+  // CRÉER un nouveau produit - CORRIGÉ
   create: (productData) => {
     const config = productData instanceof FormData 
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : {}
     return api.post('/products/products/', productData, config)
   },
+  
+  // MODIFIER un produit
   update: (id, productData) => {
     const config = productData instanceof FormData 
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : {}
     return api.patch(`/products/products/${id}/`, productData, config)
   },
+  
+  // SUPPRIMER un produit
   delete: (id) => api.delete(`/products/products/${id}/`),
+  
+  // Récupérer les catégories
   getCategories: () => api.get('/products/categories/'),
+  
+  // Récupérer les produits du farmer connecté - CORRIGÉ
+  getMyProducts: () => api.get('/products/my-products/'),
+  
+  // Rechercher des produits
   search: (query, params = {}) => api.get('/products/products/', { 
     params: { search: query, ...params } 
   }),
-  getMyProducts: () => api.get('/products/my-products/'),
-  toggleFavorite: (productId) => api.post(`/products/products/${productId}/toggle_favorite/`),
-  getFavorites: () => api.get('/products/favorites/'),
 }
+
+export const ordersAPI = {
+  getAll: (params) => api.get('/orders/orders/', { params }),
+  getById: (id) => api.get(`/orders/orders/${id}/`),
+  create: (orderData) => api.post('/orders/orders/', orderData),
+  updateStatus: (id, status) => api.patch(`/orders/orders/${id}/`, { status }),
+  
+  // Récupérer les commandes du farmer - NOUVELLE MÉTHODE
+  getFarmerOrders: async () => {
+    // Comme l'endpoint /farmer-orders/ n'existe pas, on récupère toutes les commandes
+    // et on filtre côté client celles qui concernent les produits du farmer
+    try {
+      const response = await api.get('/orders/orders/')
+      const allOrders = response.data || []
+      
+      // Récupérer les produits du farmer
+      const myProductsResponse = await productsAPI.getMyProducts()
+      const myProductIds = myProductsResponse.data.map(product => product.id)
+      
+      // Filtrer les commandes qui contiennent les produits du farmer
+      const farmerOrders = allOrders.filter(order => 
+        order.items && order.items.some(item => 
+          myProductIds.includes(item.product)
+        )
+      )
+      
+      return { data: farmerOrders }
+    } catch (error) {
+      console.error('Error fetching farmer orders:', error)
+      return { data: [] }
+    }
+  },
+  
+  getMyOrders: () => api.get('/orders/orders/history/'),
+  cancelOrder: (id) => api.post(`/orders/orders/${id}/cancel/`),
+}
+
 
 export const cartAPI = {
   getCart: () => api.get('/orders/cart/'),
@@ -127,7 +175,7 @@ export const cartAPI = {
   clearCart: () => api.delete('/orders/cart/clear/'),
 }
 
-export const ordersAPI = {
+export const ordersAPIw = {
   getAll: (params) => api.get('/orders/orders/', { params }),
   getById: (id) => api.get(`/orders/orders/${id}/`),
   create: (orderData) => api.post('/orders/orders/', orderData),

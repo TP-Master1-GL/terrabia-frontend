@@ -11,7 +11,8 @@ import {
   Button,
   Card,
   CardContent,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material'
 import {
   Add,
@@ -26,7 +27,7 @@ import StatsCard from '../../components/admin/StatsCard'
 import ProductList from '../../components/farmer/ProductList'
 import ProductForm from '../../components/farmer/ProductForm'
 import OrderList from '../../components/farmer/OrderList'
-import { authAPI, productsAPI } from '../../services/api'
+import { productsAPI, ordersAPI } from '../../services/api' // ✅ Import correct des APIs
 
 const FarmerDashboard = () => {
   const { user } = useAuth()
@@ -37,6 +38,7 @@ const FarmerDashboard = () => {
   const [stats, setStats] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [editingProduct, setEditingProduct] = useState(null)
 
   // Charger les données
   useEffect(() => {
@@ -49,21 +51,23 @@ const FarmerDashboard = () => {
       setError('')
 
       if (activeTab === 0) {
-        // Charger les produits
-        const productsResponse = await authAPI.getMyProducts()
-        setProducts(productsResponse.data)
+        // Charger les produits du farmer - CORRIGÉ
+        const productsResponse = await productsAPI.getMyProducts()
+        setProducts(productsResponse.data || [])
       } else if (activeTab === 1) {
-        // Charger les commandes
-        const ordersResponse = await authAPI.getMyOrders()
-        setOrders(ordersResponse.data)
-      } else if (activeTab === 3) {
-        // Charger les statistiques
-        const statsResponse = await authAPI.getStats()
-        setStats(statsResponse.data)
+        // Charger les commandes du farmer - CORRIGÉ
+        const ordersResponse = await ordersAPI.getFarmerOrders()
+        setOrders(ordersResponse.data || [])
       }
     } catch (err) {
-      setError('Erreur lors du chargement des données')
       console.error('Load data error:', err)
+      if (err.response?.status === 404) {
+        // API endpoints might not exist yet, set empty arrays
+        if (activeTab === 0) setProducts([])
+        if (activeTab === 1) setOrders([])
+      } else {
+        setError('Erreur lors du chargement des données')
+      }
     } finally {
       setLoading(false)
     }
@@ -71,82 +75,129 @@ const FarmerDashboard = () => {
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue)
+    setShowProductForm(false)
+    setEditingProduct(null)
   }
 
   const handleAddProduct = async (formData) => {
     try {
       setLoading(true)
-      const response = await authAPI.createProduct(formData)
+      setError('')
+      console.log('Adding product with data:', formData)
+      
+      const response = await productsAPI.create(formData)
+      console.log('Product created:', response.data)
+      
       setProducts(prev => [response.data, ...prev])
       setShowProductForm(false)
-      setError('')
+      await loadData() // Recharger les données
     } catch (err) {
-      setError('Erreur lors de la création du produit')
+      console.error('Error creating product:', err)
+      setError(err.response?.data?.message || 'Erreur lors de la création du produit')
+      throw err // Propager l'erreur pour que ProductForm puisse la gérer
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEditProduct = async (productId, productData) => {
+  const handleEditProduct = async (product) => {
+    setEditingProduct(product)
+    setShowProductForm(true)
+  }
+
+  const handleUpdateProduct = async (formData) => {
     try {
-      const response = await authAPI.updateProduct(productId, productData)
-      setProducts(prev => prev.map(p => p.id === productId ? response.data : p))
+      setLoading(true)
       setError('')
+      
+      const response = await productsAPI.update(editingProduct.id, formData)
+      console.log('Product updated:', response.data)
+      
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? response.data : p))
+      setShowProductForm(false)
+      setEditingProduct(null)
+      await loadData() // Recharger les données
     } catch (err) {
-      setError('Erreur lors de la modification du produit')
+      console.error('Error updating product:', err)
+      setError(err.response?.data?.message || 'Erreur lors de la modification du produit')
+      throw err
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleDeleteProduct = async (productId) => {
     try {
-      await authAPI.deleteProduct(productId)
-      setProducts(prev => prev.filter(p => p.id !== productId))
       setError('')
+      await productsAPI.delete(productId)
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      await loadData() // Recharger les données
     } catch (err) {
-      setError('Erreur lors de la suppression du produit')
+      console.error('Error deleting product:', err)
+      setError(err.response?.data?.message || 'Erreur lors de la suppression du produit')
     }
   }
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await authAPI.updateOrderStatus(orderId, newStatus)
-      setOrders(prev => prev.map(o => o.id === orderId ? response.data : o))
       setError('')
+      const response = await ordersAPI.updateStatus(orderId, newStatus)
+      setOrders(prev => prev.map(o => o.id === orderId ? response.data : o))
+      await loadData() // Recharger les données
     } catch (err) {
-      setError('Erreur lors de la mise à jour du statut')
+      console.error('Error updating order status:', err)
+      setError(err.response?.data?.message || 'Erreur lors de la mise à jour du statut')
     }
   }
 
-  // Statistiques par défaut si l'API n'est pas encore implémentée
-  const defaultStats = [
-    {
-      title: 'Produits Actifs',
-      value: products.length.toString(),
-      change: 8,
-      icon: <Inventory />
-    },
-    {
-      title: 'Commandes du Mois',
-      value: orders.filter(o => new Date(o.created_at).getMonth() === new Date().getMonth()).length.toString(),
-      change: 15,
-      icon: <Receipt />
-    },
-    {
-      title: 'Revenus du Mois',
-      value: `${orders
-        .filter(o => new Date(o.created_at).getMonth() === new Date().getMonth())
-        .reduce((sum, order) => sum + order.total, 0)
-        .toLocaleString()} FCFA`,
-      change: 12,
-      icon: <TrendingUp />
-    },
-    {
-      title: 'Notes Moyennes',
-      value: '4.2/5',
-      change: 5,
-      icon: <Chat />
-    }
-  ]
+  const handleCancelForm = () => {
+    setShowProductForm(false)
+    setEditingProduct(null)
+  }
+
+  // Calcul des statistiques en temps réel
+  const calculateStats = () => {
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    
+    const monthlyOrders = orders.filter(order => {
+      const orderDate = new Date(order.created_at)
+      return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear
+    })
+
+    const monthlyRevenue = monthlyOrders.reduce((sum, order) => {
+      return sum + parseFloat(order.total_amount || 0)
+    }, 0)
+
+    const activeProducts = products.filter(p => p.available).length
+
+    return [
+      {
+        title: 'Produits Actifs',
+        value: activeProducts.toString(),
+        change: 8,
+        icon: <Inventory />
+      },
+      {
+        title: 'Commandes du Mois',
+        value: monthlyOrders.length.toString(),
+        change: 15,
+        icon: <Receipt />
+      },
+      {
+        title: 'Revenus du Mois',
+        value: `${monthlyRevenue.toLocaleString()} FCFA`,
+        change: monthlyRevenue > 0 ? 12 : 0,
+        icon: <TrendingUp />
+      },
+      {
+        title: 'Satisfaction',
+        value: '4.2/5',
+        change: 5,
+        icon: <Chat />
+      }
+    ]
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -160,13 +211,18 @@ const FarmerDashboard = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 3 }}
+          onClose={() => setError('')}
+        >
           {error}
         </Alert>
       )}
 
+      {/* Statistiques */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {(stats.length > 0 ? stats : defaultStats).map((stat, index) => (
+        {calculateStats().map((stat, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
             <StatsCard {...stat} />
           </Grid>
@@ -188,22 +244,25 @@ const FarmerDashboard = () => {
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h5">
-                  Mes Produits
+                  Mes Produits ({products.length})
                 </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => setShowProductForm(true)}
-                  disabled={loading}
-                >
-                  Ajouter un Produit
-                </Button>
+                {!showProductForm && (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setShowProductForm(true)}
+                    disabled={loading}
+                  >
+                    Ajouter un Produit
+                  </Button>
+                )}
               </Box>
 
               {showProductForm ? (
                 <ProductForm 
-                  onSubmit={handleAddProduct}
-                  onCancel={() => setShowProductForm(false)}
+                  onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
+                  initialData={editingProduct}
+                  onCancel={handleCancelForm}
                   loading={loading}
                 />
               ) : (
@@ -212,6 +271,7 @@ const FarmerDashboard = () => {
                   onEdit={handleEditProduct}
                   onDelete={handleDeleteProduct}
                   loading={loading}
+                  error={error}
                 />
               )}
             </Box>
@@ -219,14 +279,23 @@ const FarmerDashboard = () => {
 
           {activeTab === 1 && (
             <Box>
-              <Typography variant="h5" gutterBottom>
-                Commandes Reçues
-              </Typography>
-              <OrderList
-                orders={orders}
-                onUpdateStatus={handleUpdateOrderStatus}
-                loading={loading}
-              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h5">
+                  Commandes Reçues ({orders.length})
+                </Typography>
+              </Box>
+              {loading ? (
+                <Box display="flex" justifyContent="center" py={4}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <OrderList
+                  orders={orders}
+                  onUpdateStatus={handleUpdateOrderStatus}
+                  loading={loading}
+                  error={error}
+                />
+              )}
             </Box>
           )}
 
@@ -268,9 +337,14 @@ const FarmerDashboard = () => {
                       <Typography variant="h6" gutterBottom>
                         Ventes Mensuelles
                       </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Graphique des ventes à implémenter avec les données de l'API
-                      </Typography>
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="body2" color="textSecondary">
+                          Graphique des ventes à implémenter
+                        </Typography>
+                        <Typography variant="h4" color="primary" sx={{ mt: 2 }}>
+                          {calculateStats()[1].value} commandes
+                        </Typography>
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -280,9 +354,23 @@ const FarmerDashboard = () => {
                       <Typography variant="h6" gutterBottom>
                         Produits Populaires
                       </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Tableau des produits les plus vendus à implémenter
-                      </Typography>
+                      <Box sx={{ mt: 2 }}>
+                        {products.slice(0, 3).map((product, index) => (
+                          <Box key={product.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 1 }}>
+                            <Typography variant="body2">
+                              {index + 1}. {product.name}
+                            </Typography>
+                            <Typography variant="body2" color="textSecondary">
+                              {product.price} FCFA
+                            </Typography>
+                          </Box>
+                        ))}
+                        {products.length === 0 && (
+                          <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
+                            Aucun produit
+                          </Typography>
+                        )}
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
