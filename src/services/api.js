@@ -1,7 +1,8 @@
 // src/services/api.js
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://terrabia-mobile.onrender.com/api'
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://terrabia-mobile.onrender.com/api'
+const API_BASE_URL = 'http://127.0.0.1:8000/api/'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -41,14 +42,39 @@ api.interceptors.response.use(
   }
 )
 
-// 🔐 API d'authentification - CORRIGÉE
+// 🔐 API d'authentification - COMPLÈTEMENT CORRIGÉE
 export const authAPI = {
-  // Authentification JWT - Format Django SimpleJWT
-  login: (credentials) => {
-    return api.post('/token/', {
-      username: credentials.email, // SimpleJWT utilise 'username'
-      password: credentials.password
-    })
+  // Méthode UNIQUE pour login qui essaie les 2 endpoints possibles
+  login: async (credentials) => {
+    // Votre backend semble avoir un endpoint custom /auth/login/
+    // mais il pourrait aussi avoir l'endpoint SimpleJWT standard /token/
+    
+    // Essayons d'abord l'endpoint custom /auth/login/
+    try {
+      console.log('Tentative de login avec /auth/login/...')
+      const response = await api.post('/auth/login/', {
+        email: credentials.email,    // Votre backend Django semble attendre 'email'
+        password: credentials.password
+      })
+      console.log('✅ Login réussi via /auth/login/')
+      return response
+    } catch (customError) {
+      console.log('❌ /auth/login/ échoué, tentative avec /token/...', customError.response?.data)
+      
+      // Fallback: Essayons l'endpoint SimpleJWT standard
+      try {
+        // Pour SimpleJWT, nous devons utiliser 'username' au lieu de 'email'
+        const jwtResponse = await api.post('/token/', {
+          username: credentials.email,  // SimpleJWT utilise 'username'
+          password: credentials.password
+        })
+        console.log('✅ Login réussi via /token/')
+        return jwtResponse
+      } catch (jwtError) {
+        console.log('❌ Les deux méthodes de login ont échoué')
+        throw jwtError // Lance l'erreur pour qu'elle soit traitée par l'appelant
+      }
+    }
   },
   
   refreshToken: (refreshToken) => api.post('/token/refresh/', { refresh: refreshToken }),
@@ -56,42 +82,61 @@ export const authAPI = {
   // Inscription - Format adapté pour votre backend
   register: (userData) => {
     const djangoUserData = {
-      // Champs obligatoires pour SimpleJWT/Django
-      username: userData.email, // Utiliser l'email comme username
+      // Champs obligatoires pour votre serializer
+      username: userData.username || userData.email.split('@')[0] + Date.now(), // Générer un username unique
       email: userData.email,
       password: userData.password,
-      password_confirm: userData.password,
+      password_confirm: userData.password_confirm || userData.password,
       
       // Champs personnalisés
-      first_name: userData.first_name,
-      last_name: userData.last_name,
-      user_type: userData.user_type,
-      phone_number: userData.phone,
-      address: userData.address,
+      first_name: userData.first_name || '',
+      last_name: userData.last_name || '',
+      user_type: userData.user_type || 'buyer',
+      phone_number: userData.phone_number || userData.phone || '',
       
-      // Champs de profil selon le type d'utilisateur
-      farm_name: userData.farm_name || '',
-      company_name: userData.company_name || ''
+      // Champs optionnels
+      ...(userData.address && { address: userData.address }),
+      ...(userData.farm_name && { farm_name: userData.farm_name }),
+      ...(userData.company_name && { company_name: userData.company_name })
     }
     
-    console.log('Données envoyées à Django:', djangoUserData)
+    console.log('📤 Données d\'inscription envoyées:', djangoUserData)
     return api.post('/auth/register/', djangoUserData)
   },
   
   // Vérification du token et récupération de l'utilisateur
   verifyToken: () => api.get('/auth/verify/'),
-  getCurrentUser: () => api.get('/auth/users/me/'),
+  getCurrentUser: async () => {
+    // Essayez plusieurs endpoints possibles
+    const endpoints = ['/auth/users/me/', '/auth/me/', '/auth/user/', '/users/me/']
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await api.get(endpoint)
+        console.log(`✅ User récupéré via ${endpoint}`)
+        return response
+      } catch (error) {
+        console.log(`❌ ${endpoint} - ${error.response?.status || error.message}`)
+        continue
+      }
+    }
+    throw new Error('Aucun endpoint utilisateur trouvé')
+  },
   
   // Gestion des tokens
   setTokens: (access, refresh) => {
     localStorage.setItem('token', access)
     localStorage.setItem('refresh_token', refresh)
+    console.log('🔑 Tokens sauvegardés dans localStorage')
   },
   clearTokens: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    console.log('🧹 Tokens supprimés')
   }
 }
+
 export const productsAPI = {
   // Récupérer tous les produits (public)
   getAll: (params) => api.get('/products/products/', { params }),
@@ -99,7 +144,7 @@ export const productsAPI = {
   // Récupérer un produit spécifique
   getById: (id) => api.get(`/products/products/${id}/`),
   
-  // CRÉER un nouveau produit - CORRIGÉ
+  // CRÉER un nouveau produit
   create: (productData) => {
     const config = productData instanceof FormData 
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
@@ -121,7 +166,7 @@ export const productsAPI = {
   // Récupérer les catégories
   getCategories: () => api.get('/products/categories/'),
   
-  // Récupérer les produits du farmer connecté - CORRIGÉ
+  // Récupérer les produits du farmer connecté
   getMyProducts: () => api.get('/products/my-products/'),
   
   // Rechercher des produits
@@ -129,43 +174,6 @@ export const productsAPI = {
     params: { search: query, ...params } 
   }),
 }
-
-export const ordersAPI = {
-  getAll: (params) => api.get('/orders/orders/', { params }),
-  getById: (id) => api.get(`/orders/orders/${id}/`),
-  create: (orderData) => api.post('/orders/orders/', orderData),
-  updateStatus: (id, status) => api.patch(`/orders/orders/${id}/`, { status }),
-  
-  // Récupérer les commandes du farmer - NOUVELLE MÉTHODE
-  getFarmerOrders: async () => {
-    // Comme l'endpoint /farmer-orders/ n'existe pas, on récupère toutes les commandes
-    // et on filtre côté client celles qui concernent les produits du farmer
-    try {
-      const response = await api.get('/orders/orders/')
-      const allOrders = response.data || []
-      
-      // Récupérer les produits du farmer
-      const myProductsResponse = await productsAPI.getMyProducts()
-      const myProductIds = myProductsResponse.data.map(product => product.id)
-      
-      // Filtrer les commandes qui contiennent les produits du farmer
-      const farmerOrders = allOrders.filter(order => 
-        order.items && order.items.some(item => 
-          myProductIds.includes(item.product)
-        )
-      )
-      
-      return { data: farmerOrders }
-    } catch (error) {
-      console.error('Error fetching farmer orders:', error)
-      return { data: [] }
-    }
-  },
-  
-  getMyOrders: () => api.get('/orders/orders/history/'),
-  cancelOrder: (id) => api.post(`/orders/orders/${id}/cancel/`),
-}
-
 
 export const cartAPI = {
   getCart: () => api.get('/orders/cart/'),
@@ -175,13 +183,46 @@ export const cartAPI = {
   clearCart: () => api.delete('/orders/cart/clear/'),
 }
 
-export const ordersAPIw = {
+export const ordersAPI = {
   getAll: (params) => api.get('/orders/orders/', { params }),
   getById: (id) => api.get(`/orders/orders/${id}/`),
   create: (orderData) => api.post('/orders/orders/', orderData),
   updateStatus: (id, status) => api.patch(`/orders/orders/${id}/`, { status }),
   getMyOrders: () => api.get('/orders/orders/history/'),
-  getFarmerOrders: () => api.get('/orders/farmer-orders/'),
+  
+  // Méthode pour récupérer les commandes du farmer
+  getFarmerOrders: async () => {
+    try {
+      // D'abord, vérifiez si l'endpoint farmer-orders existe
+      try {
+        const response = await api.get('/orders/farmer-orders/')
+        console.log('✅ Endpoint farmer-orders trouvé')
+        return response
+      } catch (endpointError) {
+        console.log('❌ Endpoint farmer-orders non trouvé, filtre côté client...')
+        // Fallback: Récupérer toutes les commandes et filtrer
+        const allOrdersResponse = await api.get('/orders/orders/')
+        const allOrders = allOrdersResponse.data || []
+        
+        // Récupérer les produits du farmer
+        const myProductsResponse = await api.get('/products/my-products/')
+        const myProductIds = myProductsResponse.data.map(product => product.id)
+        
+        // Filtrer les commandes
+        const farmerOrders = allOrders.filter(order => 
+          order.items && order.items.some(item => 
+            myProductIds.includes(item.product)
+          )
+        )
+        
+        return { data: farmerOrders }
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des commandes farmer:', error)
+      return { data: [] }
+    }
+  },
+  
   cancelOrder: (id) => api.post(`/orders/orders/${id}/cancel/`),
 }
 
@@ -204,7 +245,7 @@ export const apiUtils = {
   logout: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
-    localStorage.removeItem('terrabia_user')
+    localStorage.removeItem('user')
     window.location.href = '/login'
   },
   
@@ -212,7 +253,7 @@ export const apiUtils = {
     if (error.response) {
       return error.response.data
     } else if (error.request) {
-      return { message: 'No response from server' }
+      return { message: 'Pas de réponse du serveur' }
     } else {
       return { message: error.message }
     }

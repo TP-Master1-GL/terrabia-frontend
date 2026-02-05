@@ -4,40 +4,87 @@ import {
   productsAPI, 
   cartAPI, 
   ordersAPI, 
-  usersAPI 
-} from '../services/api'
+  usersAPI,
+  apiUtils
+} from './api'
+
+import api from './api'
 
 class ApiService {
   constructor() {
     this.token = localStorage.getItem('token')
+    this.user = JSON.parse(localStorage.getItem('user') || 'null')
   }
 
   // 🔐 Authentification
   async login(credentials) {
     try {
-      const response = await authAPI.login(credentials)
-      const { access, refresh } = response.data
+      console.log('🔐 Tentative de connexion avec:', credentials.email)
       
+      const response = await authAPI.login(credentials)
+      const { access, refresh, user } = response.data
+      
+      if (!access) {
+        throw new Error('Token d\'accès non reçu')
+      }
+      
+      // Sauvegarder les tokens
       authAPI.setTokens(access, refresh)
       
-      // Récupérer les infos utilisateur
+      // Si l'utilisateur est dans la réponse, le sauvegarder
+      if (user) {
+        this.user = user
+        localStorage.setItem('user', JSON.stringify(user))
+        return { user, token: access }
+      }
+      
+      // Sinon, récupérer l'utilisateur
       const userResponse = await this.getCurrentUser()
+      this.user = userResponse
+      localStorage.setItem('user', JSON.stringify(userResponse))
+      
       return { user: userResponse, token: access }
     } catch (error) {
+      console.error('❌ Erreur de connexion:', error)
       throw this.handleError(error)
     }
   }
 
   async register(userData) {
     try {
+      console.log('📝 Inscription de l\'utilisateur:', userData.email)
+      
       const response = await authAPI.register(userData)
-      const { access, refresh } = response.data
+      console.log('✅ Réponse d\'inscription:', response.data)
       
-      authAPI.setTokens(access, refresh)
+      // Votre backend semble renvoyer { user, refresh, access }
+      const { access, refresh, user } = response.data
       
-      const userResponse = await this.getCurrentUser()
-      return { user: userResponse, token: access }
+      if (access && refresh) {
+        authAPI.setTokens(access, refresh)
+        
+        if (user) {
+          this.user = user
+          localStorage.setItem('user', JSON.stringify(user))
+          return { user, token: access }
+        }
+        
+        // Récupérer l'utilisateur si non fourni
+        const userResponse = await this.getCurrentUser()
+        this.user = userResponse
+        localStorage.setItem('user', JSON.stringify(userResponse))
+        return { user: userResponse, token: access }
+      } else {
+        // Si le backend ne renvoie pas de token, connectez l'utilisateur
+        console.log('⚠️ Aucun token reçu, tentative de connexion...')
+        const loginResult = await this.login({
+          email: userData.email,
+          password: userData.password
+        })
+        return loginResult
+      }
     } catch (error) {
+      console.error('❌ Erreur d\'inscription:', error)
       throw this.handleError(error)
     }
   }
@@ -47,13 +94,41 @@ class ApiService {
       const response = await authAPI.getCurrentUser()
       return response.data
     } catch (error) {
-      throw this.handleError(error)
+      console.error('❌ Erreur récupération utilisateur:', error)
+      
+      // Si échec, essayer avec les endpoints les plus courants
+      try {
+        const endpoints = [
+          '/auth/me/',
+          '/users/me/',
+          '/auth/user/',
+          '/profile/'
+        ]
+        
+        for (const endpoint of endpoints) {
+          try {
+            const response = await api.get(endpoint)
+            return response.data
+          } catch (e) {
+            continue
+          }
+        }
+        
+        throw new Error('Impossible de récupérer les informations utilisateur')
+      } catch (finalError) {
+        throw this.handleError(finalError)
+      }
     }
   }
 
   async updateProfile(userData) {
     try {
-      const response = await authAPI.updateProfile(userData)
+      const response = await usersAPI.updateUser(userData)
+      
+      // Mettre à jour l'utilisateur en cache
+      this.user = { ...this.user, ...response.data }
+      localStorage.setItem('user', JSON.stringify(this.user))
+      
       return response.data
     } catch (error) {
       throw this.handleError(error)
@@ -62,6 +137,9 @@ class ApiService {
 
   logout() {
     authAPI.clearTokens()
+    this.user = null
+    this.token = null
+    apiUtils.logout()
   }
 
   // 🛍️ Produits
@@ -121,8 +199,15 @@ class ApiService {
 
   async toggleFavorite(productId) {
     try {
-      const response = await productsAPI.toggleFavorite(productId)
-      return response.data
+      // Vérifiez si votre backend a cet endpoint
+      try {
+        const response = await api.post(`/products/${productId}/favorite/`)
+        return response.data
+      } catch (error) {
+        // Fallback: Utiliser un autre endpoint
+        const response = await api.post('/favorites/', { product_id: productId })
+        return response.data
+      }
     } catch (error) {
       throw this.handleError(error)
     }
@@ -130,7 +215,7 @@ class ApiService {
 
   async getFavorites() {
     try {
-      const response = await productsAPI.getFavorites()
+      const response = await api.get('/favorites/')
       return response.data
     } catch (error) {
       throw this.handleError(error)
@@ -161,7 +246,7 @@ class ApiService {
 
   async updateCartItem(itemId, quantity) {
     try {
-      const response = await cartAPI.updateCartItem(itemId, { quantity })
+      const response = await cartAPI.updateCartItem(itemId, quantity)
       return response.data
     } catch (error) {
       throw this.handleError(error)
@@ -216,7 +301,7 @@ class ApiService {
 
   async updateOrderStatus(orderId, status) {
     try {
-      const response = await ordersAPI.updateStatus(orderId, { status })
+      const response = await ordersAPI.updateStatus(orderId, status)
       return response.data
     } catch (error) {
       throw this.handleError(error)
@@ -226,31 +311,127 @@ class ApiService {
   // 👥 Utilisateurs
   async getUsers(params = {}) {
     try {
-      const response = await usersAPI.getUsers({ params })
+      const response = await usersAPI.getUsers(params)
       return response.data
     } catch (error) {
       throw this.handleError(error)
     }
   }
 
-  // Utilitaires
+  async getUser(userId) {
+    try {
+      const response = await usersAPI.getUser(userId)
+      return response.data
+    } catch (error) {
+      throw this.handleError(error)
+    }
+  }
+
+  // 🔧 Utilitaires
   handleError(error) {
+    console.error('API Service Error:', error)
+    
     if (error.response) {
-      const message = error.response.data.detail || 
-                     error.response.data.message || 
-                     error.response.data.error || 
-                     'Erreur serveur'
-      throw new Error(message)
+      // Erreur du serveur avec réponse
+      const { data, status } = error.response
+      
+      let message = 'Erreur serveur'
+      
+      if (typeof data === 'string') {
+        message = data
+      } else if (data.detail) {
+        message = data.detail
+      } else if (data.message) {
+        message = data.message
+      } else if (data.error) {
+        message = data.error
+      } else if (data.non_field_errors) {
+        message = data.non_field_errors.join(', ')
+      } else if (typeof data === 'object') {
+        // Extraire le premier message d'erreur
+        const firstKey = Object.keys(data)[0]
+        if (Array.isArray(data[firstKey])) {
+          message = `${firstKey}: ${data[firstKey].join(', ')}`
+        } else if (typeof data[firstKey] === 'string') {
+          message = `${firstKey}: ${data[firstKey]}`
+        }
+      }
+      
+      const apiError = new Error(message)
+      apiError.status = status
+      apiError.data = data
+      throw apiError
     } else if (error.request) {
-      throw new Error('Pas de réponse du serveur')
+      // Pas de réponse du serveur
+      throw new Error('Pas de réponse du serveur. Vérifiez votre connexion.')
     } else {
-      throw new Error(error.message)
+      // Erreur de configuration
+      throw new Error(`Erreur de configuration: ${error.message}`)
     }
   }
 
   isAuthenticated() {
-    return !!localStorage.getItem('token')
+    const token = localStorage.getItem('token')
+    return !!token && token !== 'null' && token !== 'undefined'
+  }
+
+  getCurrentUserData() {
+    return this.user
+  }
+
+  setUser(user) {
+    this.user = user
+    localStorage.setItem('user', JSON.stringify(user))
+  }
+
+  // Rafraîchir le token
+  async refreshAuthToken() {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+      
+      const response = await authAPI.refreshToken(refreshToken)
+      const { access, refresh } = response.data
+      
+      authAPI.setTokens(access, refresh)
+      return access
+    } catch (error) {
+      this.logout()
+      throw error
+    }
   }
 }
 
-export default new ApiService()
+// Créer une instance unique
+const apiServiceInstance = new ApiService()
+
+// Ajouter l'intercepteur pour rafraîchir le token
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config
+    
+    // Si l'erreur est 401 et que nous n'avons pas déjà tenté de rafraîchir
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+      
+      try {
+        const newToken = await apiServiceInstance.refreshAuthToken()
+        
+        // Réessayer la requête originale avec le nouveau token
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return api(originalRequest)
+      } catch (refreshError) {
+        // Si le rafraîchissement échoue, déconnecter l'utilisateur
+        apiServiceInstance.logout()
+        return Promise.reject(refreshError)
+      }
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
+export default apiServiceInstance
