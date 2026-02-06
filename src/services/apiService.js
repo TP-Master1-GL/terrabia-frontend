@@ -57,7 +57,6 @@ class ApiService {
       const response = await authAPI.register(userData)
       console.log('✅ Réponse d\'inscription:', response.data)
       
-      // Votre backend semble renvoyer { user, refresh, access }
       const { access, refresh, user } = response.data
       
       if (access && refresh) {
@@ -69,13 +68,11 @@ class ApiService {
           return { user, token: access }
         }
         
-        // Récupérer l'utilisateur si non fourni
         const userResponse = await this.getCurrentUser()
         this.user = userResponse
         localStorage.setItem('user', JSON.stringify(userResponse))
         return { user: userResponse, token: access }
       } else {
-        // Si le backend ne renvoie pas de token, connectez l'utilisateur
         console.log('⚠️ Aucun token reçu, tentative de connexion...')
         const loginResult = await this.login({
           email: userData.email,
@@ -96,7 +93,6 @@ class ApiService {
     } catch (error) {
       console.error('❌ Erreur récupération utilisateur:', error)
       
-      // Si échec, essayer avec les endpoints les plus courants
       try {
         const endpoints = [
           '/auth/me/',
@@ -121,11 +117,65 @@ class ApiService {
     }
   }
 
+  // 💬 CHAT - NOUVELLES FONCTIONS AJOUTÉES
+  async getConversations() {
+    try {
+      const response = await api.get('/chat/conversations/')
+      return response.data
+    } catch (error) {
+      console.error('❌ Erreur récupération conversations:', error)
+      throw this.handleError(error)
+    }
+  }
+
+  async getMessages(conversationId) {
+    try {
+      const response = await api.get(`/chat/conversations/${conversationId}/messages/`)
+      return response.data
+    } catch (error) {
+      console.error('❌ Erreur récupération messages:', error)
+      throw this.handleError(error)
+    }
+  }
+
+  async sendMessage(conversationId, content) {
+    try {
+      const response = await api.post(`/chat/conversations/${conversationId}/messages/`, {
+        content
+      })
+      return response.data
+    } catch (error) {
+      console.error('❌ Erreur envoi message:', error)
+      throw this.handleError(error)
+    }
+  }
+
+  async markAsRead(conversationId) {
+    try {
+      const response = await api.post(`/chat/conversations/${conversationId}/mark_read/`)
+      return response.data
+    } catch (error) {
+      console.error('❌ Erreur marquage comme lu:', error)
+      throw this.handleError(error)
+    }
+  }
+
+  async createConversation(participantId) {
+    try {
+      const response = await api.post('/chat/conversations/', {
+        participant_id: participantId
+      })
+      return response.data
+    } catch (error) {
+      console.error('❌ Erreur création conversation:', error)
+      throw this.handleError(error)
+    }
+  }
+
   async updateProfile(userData) {
     try {
       const response = await usersAPI.updateUser(userData)
       
-      // Mettre à jour l'utilisateur en cache
       this.user = { ...this.user, ...response.data }
       localStorage.setItem('user', JSON.stringify(this.user))
       
@@ -199,12 +249,10 @@ class ApiService {
 
   async toggleFavorite(productId) {
     try {
-      // Vérifiez si votre backend a cet endpoint
       try {
         const response = await api.post(`/products/${productId}/favorite/`)
         return response.data
       } catch (error) {
-        // Fallback: Utiliser un autre endpoint
         const response = await api.post('/favorites/', { product_id: productId })
         return response.data
       }
@@ -332,7 +380,6 @@ class ApiService {
     console.error('API Service Error:', error)
     
     if (error.response) {
-      // Erreur du serveur avec réponse
       const { data, status } = error.response
       
       let message = 'Erreur serveur'
@@ -348,7 +395,6 @@ class ApiService {
       } else if (data.non_field_errors) {
         message = data.non_field_errors.join(', ')
       } else if (typeof data === 'object') {
-        // Extraire le premier message d'erreur
         const firstKey = Object.keys(data)[0]
         if (Array.isArray(data[firstKey])) {
           message = `${firstKey}: ${data[firstKey].join(', ')}`
@@ -362,10 +408,8 @@ class ApiService {
       apiError.data = data
       throw apiError
     } else if (error.request) {
-      // Pas de réponse du serveur
       throw new Error('Pas de réponse du serveur. Vérifiez votre connexion.')
     } else {
-      // Erreur de configuration
       throw new Error(`Erreur de configuration: ${error.message}`)
     }
   }
@@ -413,18 +457,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
     
-    // Si l'erreur est 401 et que nous n'avons pas déjà tenté de rafraîchir
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       
       try {
         const newToken = await apiServiceInstance.refreshAuthToken()
         
-        // Réessayer la requête originale avec le nouveau token
         originalRequest.headers.Authorization = `Bearer ${newToken}`
         return api(originalRequest)
       } catch (refreshError) {
-        // Si le rafraîchissement échoue, déconnecter l'utilisateur
         apiServiceInstance.logout()
         return Promise.reject(refreshError)
       }

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+// src/pages/Products.jsx
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -9,313 +10,620 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Pagination,
+  IconButton,
+  InputAdornment,
+  CircularProgress,
+  Alert,
+  ToggleButtonGroup,
+  ToggleButton,
   Chip,
-  Paper
-} from '@mui/material'
+  Slider,
+  Drawer,
+  Button,
+  Divider,
+  useTheme,
+  useMediaQuery,
+  Fade,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Avatar,
+  Rating,
+  Tooltip,
+  Card,
+  CardContent,
+  CardMedia,
+  CardActions,
+} from '@mui/material';
 import {
   Search,
-  Tune
-} from '@mui/icons-material'
-import ProductCard from '../../components/Customer/ProductCard'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { PRODUCT_CATEGORIES } from '../../utils/Constants'
+  GridView,
+  ViewList,
+  FilterList,
+  Clear,
+  Tune,
+  Favorite,
+  FavoriteBorder,
+  ShoppingCart,
+  Message,
+  LocalShipping,
+  Star,
+  Visibility,
+} from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import apiService from '../../services/apiService';
+import { PRODUCT_CATEGORIES } from '../../utils/Constants';
 
 const Products = () => {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [sortBy, setSortBy] = useState('name')
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [products, setProducts] = useState([])
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
 
-  // Données mockées pour les produits
-  const mockProducts = [
-    {
-      id: 1,
-      name: 'Tomates Fraîches',
-      category: 'Légumes',
-      price: 1200,
-      quantity: 50,
-      unit: 'kg',
-      description: 'Tomates rouges et juteuses cultivées localement, riches en vitamines et antioxydants. Parfaites pour vos salades et sauces.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'Jean Dupont' },
-      rating: 4.5,
-      review_count: 24,
-      is_available: true
-    },
-    {
-      id: 2,
-      name: 'Bananes Plantains',
-      category: 'Fruits',
-      price: 800,
-      quantity: 30,
-      unit: 'kg',
-      description: 'Bananes plantains mûres à point, idéales pour la cuisson. Produites dans nos plantations biologiques.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'Marie Lambert' },
-      rating: 4.2,
-      review_count: 18,
-      is_available: true
-    },
-    {
-      id: 3,
-      name: 'Oignons Locaux',
-      category: 'Légumes',
-      price: 600,
-      quantity: 100,
-      unit: 'kg',
-      description: 'Oignons frais et parfumés, récoltés manuellement. Conservation excellente.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'Pierre Ngo' },
-      rating: 4.7,
-      review_count: 32,
-      is_available: true
-    },
-    {
-      id: 4,
-      name: 'Piments Frais',
-      category: 'Épices',
-      price: 300,
-      quantity: 25,
-      unit: 'kg',
-      description: 'Piments frais et piquants, parfaits pour relever vos plats. Différents niveaux de force disponibles.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'Alice Mbarga' },
-      rating: 4.3,
-      review_count: 15,
-      is_available: true
-    },
-    {
-      id: 5,
-      name: 'Aubergines Africaines',
-      category: 'Légumes',
-      price: 700,
-      quantity: 40,
-      unit: 'kg',
-      description: 'Aubergines fraîches et fermes, excellentes pour les ragoûts et plats traditionnels.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'David Fokou' },
-      rating: 4.6,
-      review_count: 21,
-      is_available: true
-    },
-    {
-      id: 6,
-      name: 'Manioc',
-      category: 'Tubercules',
-      price: 400,
-      quantity: 80,
-      unit: 'kg',
-      description: 'Manioc frais de première qualité, parfait pour le bâton de manioc ou la farine.',
-      images: ['/placeholder-product.jpg'],
-      farmer: { name: 'Sophie Kana' },
-      rating: 4.4,
-      review_count: 28,
-      is_available: true
-    }
-  ]
+  // États
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [viewMode, setViewMode] = useState('grid');
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [priceRange, setPriceRange] = useState([0, 10000]);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [selectedFarmer, setSelectedFarmer] = useState(null);
 
   useEffect(() => {
-    setLoading(true)
-    // Simuler le chargement des données
-    const timer = setTimeout(() => {
-      setProducts(mockProducts)
-      setLoading(false)
-    }, 1000)
-    
-    return () => clearTimeout(timer)
-  }, [])
+    fetchProducts();
+    fetchCategories();
+  }, [selectedCategory, sortBy, searchTerm]);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const params = {
+        search: searchTerm || undefined,
+        category: selectedCategory || undefined,
+        ordering: sortBy,
+        price_min: priceRange[0],
+        price_max: priceRange[1],
+      };
+
+      const data = await apiService.getProducts(params);
+      setProducts(Array.isArray(data) ? data : data.results || []);
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      setError('Impossible de charger les produits');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const data = await apiService.getCategories();
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setCategories(
+        PRODUCT_CATEGORIES.map((cat, index) => ({ id: index + 1, name: cat }))
+      );
+    }
+  };
 
   const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value)
-    setPage(1)
-  }
+    setSearchTerm(event.target.value);
+  };
 
   const handleCategoryChange = (event) => {
-    setSelectedCategory(event.target.value)
-    setPage(1)
-  }
+    setSelectedCategory(event.target.value);
+  };
 
   const handleSortChange = (event) => {
-    setSortBy(event.target.value)
-  }
+    setSortBy(event.target.value);
+  };
 
-  const handlePageChange = (event, value) => {
-    setPage(value)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const handlePriceChange = (event, newValue) => {
+    setPriceRange(newValue);
+  };
 
-  // Filtrer et trier les produits
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = !selectedCategory || product.category === selectedCategory
-    return matchesSearch && matchesCategory
-  })
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('');
+    setSortBy('name');
+    setPriceRange([0, 10000]);
+  };
 
-  // Trier les produits
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    switch (sortBy) {
-      case 'price':
-        return a.price - b.price
-      case '-price':
-        return b.price - a.price
-      case 'rating':
-        return b.rating - a.rating
-      case 'name':
-      default:
-        return a.name.localeCompare(b.name)
+  const handleAddToCart = async (productId, quantity = 1) => {
+    try {
+      await apiService.addToCart(productId, quantity);
+      alert('Produit ajouté au panier !');
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      alert('Erreur lors de l\'ajout au panier');
     }
-  })
+  };
 
-  // Fonctions mockées pour l'instant
-  const handleAddToCart = (productId, quantity) => {
-    console.log('Ajouter au panier:', productId, quantity)
-    // Stocker dans le localStorage
-    const cart = JSON.parse(localStorage.getItem('terrabia_cart') || '[]')
-    const existingItem = cart.find(item => item.productId === productId)
-    
-    if (existingItem) {
-      existingItem.quantity += quantity
-    } else {
-      cart.push({ productId, quantity })
+  const handleToggleFavorite = async (productId) => {
+    try {
+      await apiService.toggleFavorite(productId);
+      fetchProducts();
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
     }
-    
-    localStorage.setItem('terrabia_cart', JSON.stringify(cart))
-    alert('Produit ajouté au panier!')
-  }
+  };
 
-  const handleToggleFavorite = (productId, isFavorite) => {
-    console.log('Toggle favori:', productId, isFavorite)
-  }
+  const handleStartChat = (farmer) => {
+    setSelectedFarmer(farmer);
+    setChatDialogOpen(true);
+  };
+
+  const handleConfirmChat = () => {
+    if (selectedFarmer) {
+      // Créer une conversation avec l'agriculteur
+      navigate(`/chat?farmer=${selectedFarmer.id}`);
+      setChatDialogOpen(false);
+    }
+  };
+
+  const handleViewProductDetails = (productId) => {
+    navigate(`/products/${productId}`);
+  };
+
+  // Composant de filtres (tiroir mobile)
+  const FilterDrawer = () => (
+    <Drawer
+      anchor="right"
+      open={filterDrawerOpen}
+      onClose={() => setFilterDrawerOpen(false)}
+      PaperProps={{
+        sx: { width: 320, p: 3 },
+      }}
+    >
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          Filtres
+        </Typography>
+        <IconButton onClick={() => setFilterDrawerOpen(false)} size="small">
+          <Clear />
+        </IconButton>
+      </Box>
+
+      <Divider sx={{ mb: 3 }} />
+
+      <FormControl fullWidth sx={{ mb: 3 }}>
+        <InputLabel>Catégorie</InputLabel>
+        <Select
+          value={selectedCategory}
+          onChange={handleCategoryChange}
+          label="Catégorie"
+        >
+          <MenuItem value="">Toutes les catégories</MenuItem>
+          {categories.map((category) => (
+            <MenuItem key={category.id} value={category.id}>
+              {category.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth sx={{ mb: 3 }}>
+        <InputLabel>Trier par</InputLabel>
+        <Select value={sortBy} onChange={handleSortChange} label="Trier par">
+          <MenuItem value="name">Nom</MenuItem>
+          <MenuItem value="price">Prix: Croissant</MenuItem>
+          <MenuItem value="-price">Prix: Décroissant</MenuItem>
+          <MenuItem value="-created_at">Nouveautés</MenuItem>
+          <MenuItem value="-rating">Meilleures notes</MenuItem>
+        </Select>
+      </FormControl>
+
+      <Box sx={{ mb: 3 }}>
+        <Typography gutterBottom variant="body2" sx={{ fontWeight: 600, mb: 2 }}>
+          Fourchette de prix
+        </Typography>
+        <Slider
+          value={priceRange}
+          onChange={handlePriceChange}
+          valueLabelDisplay="auto"
+          min={0}
+          max={10000}
+          step={100}
+          sx={{ color: 'primary.main' }}
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {priceRange[0]} FCFA
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {priceRange[1]} FCFA
+          </Typography>
+        </Box>
+      </Box>
+
+      <Button
+        fullWidth
+        variant="outlined"
+        color="error"
+        startIcon={<Clear />}
+        onClick={handleClearFilters}
+      >
+        Effacer les filtres
+      </Button>
+    </Drawer>
+  );
+
+  // Composant de carte de produit améliorée
+  const EnhancedProductCard = ({ product }) => (
+    <Card
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'transform 0.3s, box-shadow 0.3s',
+        '&:hover': {
+          transform: 'translateY(-8px)',
+          boxShadow: theme.shadows[8],
+        },
+      }}
+    >
+      {/* Image du produit */}
+      <CardMedia
+        component="img"
+        height="200"
+        image={product.image_url || '/placeholder-product.jpg'}
+        alt={product.name}
+        sx={{
+          objectFit: 'cover',
+          cursor: 'pointer',
+        }}
+        onClick={() => handleViewProductDetails(product.id)}
+      />
+
+      <CardContent sx={{ flexGrow: 1 }}>
+        {/* En-tête avec nom et favori */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+          <Typography
+            variant="h6"
+            component="h3"
+            sx={{
+              fontWeight: 600,
+              cursor: 'pointer',
+              '&:hover': { color: 'primary.main' },
+            }}
+            onClick={() => handleViewProductDetails(product.id)}
+          >
+            {product.name}
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() => handleToggleFavorite(product.id)}
+            color={product.is_favorite ? 'error' : 'default'}
+          >
+            {product.is_favorite ? <Favorite /> : <FavoriteBorder />}
+          </IconButton>
+        </Box>
+
+        {/* Description */}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mb: 2, height: 40, overflow: 'hidden' }}
+        >
+          {product.description}
+        </Typography>
+
+        {/* Agriculteur */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Avatar
+            sx={{ width: 30, height: 30, bgcolor: 'primary.light' }}
+            src={product.farmer?.avatar}
+          >
+            {product.farmer?.first_name?.[0]}
+          </Avatar>
+          <Typography variant="body2">
+            {product.farmer?.first_name} {product.farmer?.last_name}
+          </Typography>
+        </Box>
+
+        {/* Rating */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Rating
+            value={product.rating || 4.5}
+            precision={0.5}
+            size="small"
+            readOnly
+          />
+          <Typography variant="body2" color="text.secondary">
+            ({product.review_count || 12})
+          </Typography>
+        </Box>
+
+        {/* Prix */}
+        <Typography variant="h5" color="primary" sx={{ fontWeight: 700, mb: 2 }}>
+          {product.price} FCFA
+          <Typography component="span" variant="body2" color="text.secondary">
+            / {product.unit}
+          </Typography>
+        </Typography>
+
+        {/* Informations supplémentaires */}
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+          <Chip
+            label="Livraison gratuite"
+            size="small"
+            color="success"
+            variant="outlined"
+            icon={<LocalShipping />}
+          />
+          <Chip
+            label="En stock"
+            size="small"
+            color="success"
+            variant="outlined"
+          />
+        </Box>
+      </CardContent>
+
+      <CardActions sx={{ p: 2, pt: 0 }}>
+        <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<ShoppingCart />}
+              onClick={() => handleAddToCart(product.id)}
+              size="small"
+            >
+              Ajouter
+            </Button>
+          </Grid>
+          <Grid item xs={6}>
+            <Tooltip title="Contacter l'agriculteur">
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<Message />}
+                onClick={() => handleStartChat(product.farmer)}
+                size="small"
+              >
+                Contacter
+              </Button>
+            </Tooltip>
+          </Grid>
+          <Grid item xs={12}>
+            <Button
+              fullWidth
+              variant="text"
+              startIcon={<Visibility />}
+              onClick={() => handleViewProductDetails(product.id)}
+              size="small"
+              sx={{ mt: 1 }}
+            >
+              Voir détails
+            </Button>
+          </Grid>
+        </Grid>
+      </CardActions>
+    </Card>
+  );
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* En-tête */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+        <Typography
+          variant="h3"
+          component="h1"
+          sx={{ fontWeight: 700, mb: 1, color: 'primary.main' }}
+        >
           Nos Produits
         </Typography>
-        <Typography variant="body1" color="textSecondary">
-          Découvrez nos produits agricoles frais directement des fermes
+        <Typography variant="h6" color="text.secondary">
+          Découvrez nos produits frais directement des fermes
         </Typography>
       </Box>
 
-      {/* Filtres et recherche */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      {/* Barre de recherche et actions */}
+      <Box sx={{ mb: 4 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <TextField
               fullWidth
-              placeholder="Rechercher un produit..."
+              placeholder="Rechercher des produits..."
               value={searchTerm}
               onChange={handleSearchChange}
               InputProps={{
-                startAdornment: <Search sx={{ color: 'text.secondary', mr: 1 }} />
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setSearchTerm('')} size="small">
+                      <Clear />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 3,
+                  backgroundColor: 'white',
+                },
               }}
             />
           </Grid>
-          
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Catégorie</InputLabel>
-              <Select
-                value={selectedCategory}
-                onChange={handleCategoryChange}
-                label="Catégorie"
-              >
-                <MenuItem value="">Toutes les catégories</MenuItem>
-                {PRODUCT_CATEGORIES.map(category => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Trier par</InputLabel>
-              <Select
-                value={sortBy}
-                onChange={handleSortChange}
-                label="Trier par"
-              >
-                <MenuItem value="name">Nom</MenuItem>
-                <MenuItem value="price">Prix croissant</MenuItem>
-                <MenuItem value="-price">Prix décroissant</MenuItem>
-                <MenuItem value="rating">Meilleures notes</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+              {!isMobile && (
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={(e, newMode) => newMode && setViewMode(newMode)}
+                  size="small"
+                >
+                  <ToggleButton value="grid">
+                    <GridView />
+                  </ToggleButton>
+                  <ToggleButton value="list">
+                    <ViewList />
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              )}
 
-          <Grid item xs={12} md={2}>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {selectedCategory && (
-                <Chip
-                  label={`Catégorie: ${selectedCategory}`}
-                  onDelete={() => setSelectedCategory('')}
-                  size="small"
-                />
-              )}
-              {searchTerm && (
-                <Chip
-                  label={`Recherche: ${searchTerm}`}
-                  onDelete={() => setSearchTerm('')}
-                  size="small"
-                />
-              )}
+              <Button
+                variant="outlined"
+                startIcon={<FilterList />}
+                onClick={() => setFilterDrawerOpen(true)}
+              >
+                Filtres
+              </Button>
             </Box>
           </Grid>
         </Grid>
-      </Paper>
+      </Box>
 
-      {/* Liste des produits */}
+      {/* Filtres actifs */}
+      {(selectedCategory || searchTerm) && (
+        <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {searchTerm && (
+            <Chip
+              label={`Recherche: "${searchTerm}"`}
+              onDelete={() => setSearchTerm('')}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {selectedCategory && (
+            <Chip
+              label={`Catégorie: ${categories.find((c) => c.id === selectedCategory)?.name}`}
+              onDelete={() => setSelectedCategory('')}
+              color="secondary"
+              variant="outlined"
+            />
+          )}
+          <Chip
+            label="Tout effacer"
+            onClick={handleClearFilters}
+            color="error"
+            variant="outlined"
+            deleteIcon={<Clear />}
+            onDelete={handleClearFilters}
+          />
+        </Box>
+      )}
+
+      {/* Contenu principal */}
       {loading ? (
-        <LoadingSpinner message="Chargement des produits..." />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress size={60} />
+        </Box>
+      ) : error ? (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
       ) : (
         <>
-          <Grid container spacing={3}>
-            {sortedProducts.map((product) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
-                <ProductCard
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              </Grid>
-            ))}
-          </Grid>
-
-          {sortedProducts.length === 0 && (
-            <Box textAlign="center" py={6}>
-              <Typography variant="h6" color="textSecondary">
-                Aucun produit trouvé
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Essayez de modifier vos critères de recherche
-              </Typography>
-            </Box>
+          {/* Vue Grid */}
+          {viewMode === 'grid' && (
+            <Grid container spacing={3}>
+              <AnimatePresence>
+                {products.map((product, index) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <EnhancedProductCard product={product} />
+                    </motion.div>
+                  </Grid>
+                ))}
+              </AnimatePresence>
+            </Grid>
           )}
 
-          {/* Pagination */}
-          {sortedProducts.length > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-              <Pagination
-                count={Math.ceil(sortedProducts.length / 12)}
-                page={page}
-                onChange={handlePageChange}
-                color="primary"
-                size="large"
-              />
-            </Box>
+          {/* Message vide */}
+          {products.length === 0 && !loading && (
+            <Fade in>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="h5" color="text.secondary" gutterBottom>
+                  Aucun produit trouvé
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Essayez d'ajuster vos critères de recherche
+                </Typography>
+              </Box>
+            </Fade>
           )}
         </>
       )}
-    </Container>
-  )
-}
 
-export default Products
+      {/* Tiroir de filtres */}
+      <FilterDrawer />
+
+      {/* Dialogue de chat */}
+      <Dialog
+        open={chatDialogOpen}
+        onClose={() => setChatDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar
+              sx={{ bgcolor: 'primary.light' }}
+              src={selectedFarmer?.avatar}
+            >
+              {selectedFarmer?.first_name?.[0]}
+            </Avatar>
+            <Box>
+              <Typography variant="h6">
+                Contacter {selectedFarmer?.first_name} {selectedFarmer?.last_name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Agriculteur
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Vous allez démarrer une conversation avec {selectedFarmer?.first_name}. 
+            Vous pourrez discuter du produit, poser des questions sur la production, 
+            ou négocier les conditions de livraison.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            📞 {selectedFarmer?.phone_number || 'Téléphone non disponible'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            📧 {selectedFarmer?.email}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setChatDialogOpen(false)}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmChat}
+            startIcon={<Message />}
+          >
+            Démarrer la conversation
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
+  );
+};
+
+export default Products;
