@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Box,
@@ -8,567 +8,457 @@ import {
   Grid,
   Card,
   CardContent,
-  useTheme,
-  useMediaQuery
+  Avatar,
+  Rating,
+  IconButton
 } from '@mui/material'
 import {
   LocalFlorist,
   ShoppingBasket,
   Speed,
-  Security
+  Security,
+  ChevronLeft,
+  ChevronRight
 } from '@mui/icons-material'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import './Home.css'
 
 const Home = () => {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const [hoveredCard, setHoveredCard] = useState(null)
+  const [currentTestimonial, setCurrentTestimonial] = useState(0)
+  const [direction, setDirection] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
 
   const features = [
     {
-      icon: <LocalFlorist sx={{ fontSize: 48 }} />,
+      icon: <LocalFlorist sx={{ fontSize: 48, color: '#2d7a3e' }} />,
       title: 'Produits Frais',
-      description: 'Des produits agricoles frais directement des champs aux consommateurs',
-      color: '#10b981',
-      emoji: '🌱'
+      description: 'Des produits agricoles frais directement des champs aux consommateurs'
     },
     {
-      icon: <ShoppingBasket sx={{ fontSize: 48 }} />,
+      icon: <ShoppingBasket sx={{ fontSize: 48, color: '#2d7a3e' }} />,
       title: 'Achat Facile',
-      description: 'Commandez vos produits préférés en quelques clics',
-      color: '#84cc16',
-      emoji: '🛒'
+      description: 'Commandez vos produits préférés en quelques clics'
     },
     {
-      icon: <Speed sx={{ fontSize: 48 }} />,
+      icon: <Speed sx={{ fontSize: 48, color: '#2d7a3e' }} />,
       title: 'Livraison Rapide',
-      description: 'Livraison express de vos produits frais',
-      color: '#14b8a6',
-      emoji: '⚡'
+      description: 'Livraison express de vos produits frais'
     },
     {
-      icon: <Security sx={{ fontSize: 48 }} />,
+      icon: <Security sx={{ fontSize: 48, color: '#2d7a3e' }} />,
       title: 'Paiement Sécurisé',
-      description: 'Paiement via Orange Money, MTN Money et PayPal',
-      color: '#22c55e',
-      emoji: '🔒'
+      description: 'Paiement via Orange Money, MTN Money et PayPal'
     }
   ]
 
-  const stats = [
-    { value: '500+', label: 'Agriculteurs', emoji: '🌾' },
-    { value: '2000+', label: 'Clients Satisfaits', emoji: '😊' },
-    { value: '50+', label: 'Produits Disponibles', emoji: '🥬' }
+  const testimonials = [
+    {
+      name: 'Anastasie F.',
+      role: 'Agricultrice',
+      text: 'Grâce à Terrabia, je peux vendre mes produits frais à un large public et obtenir un bon prix. La plateforme est intuitive',
+      avatar: '👩🏿‍🌾',
+      rating: 5
+    },
+    {
+      name: 'Alain D.',
+      role: 'Client',
+      text: "J'adore commander sur Terrabia. Les produits sont toujours frais et la livraison est super rapide.",
+      avatar: '👨🏾‍🌾',
+      rating: 5
+    },
+    {
+      name: 'Marie K.',
+      role: 'Cliente',
+      text: "Une plateforme exceptionnelle ! Je trouve tous les produits locaux dont j'ai besoin. Qualité au top !",
+      avatar: '👩🏽',
+      rating: 5
+    },
+    {
+      name: 'Joseph M.',
+      role: 'Agriculteur',
+      text: "Terrabia m'a permis d'élargir ma clientèle et d'augmenter mes revenus. Je recommande vivement !",
+      avatar: '👨🏿‍🌾',
+      rating: 5
+    }
   ]
 
+  // Défilement automatique des témoignages
+  useEffect(() => {
+    if (isPaused) return
+
+    const interval = setInterval(() => {
+      setDirection(1)
+      setCurrentTestimonial((prev) => (prev + 1) % testimonials.length)
+    }, 5000) // Change tous les 5 secondes
+
+    return () => clearInterval(interval)
+  }, [isPaused, testimonials.length])
+
+  const handlePreviousTestimonial = () => {
+    setDirection(-1)
+    setCurrentTestimonial((prev) => (prev - 1 + testimonials.length) % testimonials.length)
+  }
+
+  const handleNextTestimonial = () => {
+    setDirection(1)
+    setCurrentTestimonial((prev) => (prev + 1) % testimonials.length)
+  }
+
+  const testimonialVariants = {
+    enter: (direction) => ({
+      x: direction > 0 ? 1000 : -1000,
+      opacity: 0,
+      scale: 0.8
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+      scale: 1
+    },
+    exit: (direction) => ({
+      x: direction > 0 ? -1000 : 1000,
+      opacity: 0,
+      scale: 0.8
+    })
+  }
+
   return (
-    <Box className="home-page" sx={{ overflow: 'hidden' }}>
+    <Box sx={{ overflow: 'hidden' }}>
       {/* Hero Section */}
       <Box
-        component="section"
         sx={{
-          background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 50%, #86efac 100%)',
-          minHeight: '100vh',
+          minHeight: '90vh',
+          background: 'linear-gradient(135deg, rgba(34, 87, 46, 0.95) 0%, rgba(45, 122, 62, 0.9) 100%)',
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          position: 'relative',
-          overflow: 'hidden',
-          py: 8
+          backgroundImage: 'url("https://images.unsplash.com/photo-1542838132-92c53300491e?w=1600")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'right center',
+          backgroundBlendMode: 'overlay',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to right, rgba(34, 87, 46, 0.98) 0%, rgba(34, 87, 46, 0.7) 60%, transparent 100%)'
+          }
         }}
       >
-        {/* Formes décoratives animées */}
-        <motion.div
-          style={{
-            position: 'absolute',
-            top: '10%',
-            left: '5%',
-            width: '200px',
-            height: '200px',
-            background: 'linear-gradient(135deg, #34d399, #10b981)',
-            borderRadius: '50%',
-            opacity: 0.2,
-            filter: 'blur(60px)'
-          }}
-          animate={{
-            scale: [1, 1.2, 1],
-            x: [0, 30, 0],
-            y: [0, -30, 0]
-          }}
-          transition={{ duration: 8, repeat: Infinity }}
-        />
-        
-        <motion.div
-          style={{
-            position: 'absolute',
-            bottom: '15%',
-            right: '10%',
-            width: '250px',
-            height: '250px',
-            background: 'linear-gradient(135deg, #6ee7b7, #34d399)',
-            borderRadius: '50%',
-            opacity: 0.2,
-            filter: 'blur(60px)'
-          }}
-          animate={{
-            scale: [1, 1.3, 1],
-            x: [0, -40, 0],
-            y: [0, 40, 0]
-          }}
-          transition={{ duration: 10, repeat: Infinity }}
-        />
-
-        {/* Étoiles scintillantes */}
-        {[...Array(15)].map((_, i) => (
-          <motion.div
-            key={i}
-            style={{
-              position: 'absolute',
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              fontSize: '20px'
-            }}
-            animate={{
-              opacity: [0, 1, 0],
-              scale: [0, 1, 0]
-            }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              delay: i * 0.3
-            }}
-          >
-            ✨
-          </motion.div>
-        ))}
-
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            {/* Badge animé */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-            >
-              <Box
-                sx={{
-                  display: 'inline-block',
-                  bgcolor: 'white',
-                  px: 3,
-                  py: 1,
-                  borderRadius: '50px',
-                  boxShadow: '0 4px 20px rgba(16, 185, 129, 0.3)',
-                  border: '2px solid #10b981',
-                  mb: 3
-                }}
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, py: 8 }}>
+          <Grid container spacing={4} alignItems="center">
+            <Grid item xs={12} md={7}>
+              <motion.div
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8 }}
               >
                 <Typography
+                  variant="h2"
                   sx={{
-                    color: '#10b981',
-                    fontWeight: 700,
-                    fontSize: '0.95rem'
-                  }}
-                >
-                  🌱 100% Bio & Local
-                </Typography>
-              </Box>
-            </motion.div>
-
-            <Typography
-              variant={isMobile ? 'h3' : 'h2'}
-              component="h1"
-              sx={{
-                fontWeight: 900,
-                mb: 2,
-                textAlign: 'center'
-              }}
-            >
-              <Box component="span" sx={{ color: '#16a34a' }}>
-                Bienvenue sur
-              </Box>
-              <br />
-              <motion.span
-                animate={{
-                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
-                }}
-                transition={{ duration: 5, repeat: Infinity }}
-                style={{
-                  background: 'linear-gradient(90deg, #10b981, #34d399, #6ee7b7, #10b981)',
-                  backgroundSize: '200% 100%',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}
-              >
-                TERRABIA
-              </motion.span>
-            </Typography>
-
-            <Typography
-              variant={isMobile ? 'h6' : 'h5'}
-              sx={{
-                mb: 2,
-                textAlign: 'center',
-                color: '#15803d',
-                fontWeight: 600
-              }}
-            >
-              🌍 Votre marché agricole en ligne - Produits frais du Cameroun et du monde
-            </Typography>
-
-            <Typography
-              variant="body1"
-              sx={{
-                mb: 5,
-                textAlign: 'center',
-                maxWidth: 700,
-                mx: 'auto',
-                fontSize: '1.1rem',
-                color: '#166534',
-                lineHeight: 1.8
-              }}
-            >
-              Connectez les agriculteurs aux consommateurs grâce à notre plateforme
-              innovante. Achetez des produits frais directement de la ferme à votre table! 🚜➡️🏡
-            </Typography>
-
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mb: 8 }}>
-              <motion.div whileHover={{ scale: 1.05, y: -5 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  component={Link}
-                  to="/products"
-                  sx={{
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                     color: 'white',
                     fontWeight: 700,
-                    px: 5,
-                    py: 2,
-                    fontSize: '1.1rem',
-                    borderRadius: '15px',
-                    boxShadow: '0 8px 30px rgba(16, 185, 129, 0.4)',
-                    textTransform: 'none',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                      boxShadow: '0 12px 40px rgba(16, 185, 129, 0.5)'
-                    }
+                    mb: 3,
+                    fontSize: { xs: '2.5rem', md: '3.5rem' },
+                    lineHeight: 1.2
                   }}
                 >
-                  🛒 Découvrir les produits
-                </Button>
-              </motion.div>
+                  Votre marché agricole en ligne<br />
+                  pour des produits frais du{' '}
+                  <Box component="span" sx={{ color: '#ffa726' }}>
+                    Cameroun
+                  </Box>
+                </Typography>
 
-              <motion.div whileHover={{ scale: 1.05, y: -5 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  variant="outlined"
-                  size="large"
-                  component={Link}
-                  to="/register"
+                <Typography
+                  variant="h6"
                   sx={{
-                    borderColor: '#10b981',
-                    borderWidth: 3,
-                    color: '#10b981',
-                    fontWeight: 700,
-                    px: 5,
-                    py: 2,
-                    fontSize: '1.1rem',
-                    borderRadius: '15px',
-                    textTransform: 'none',
-                    '&:hover': {
-                      borderWidth: 3,
-                      bgcolor: 'rgba(16, 185, 129, 0.1)',
-                      borderColor: '#059669'
-                    }
+                    color: 'rgba(255,255,255,0.95)',
+                    mb: 5,
+                    maxWidth: 600,
+                    lineHeight: 1.6,
+                    fontWeight: 400
                   }}
                 >
-                  ✨ Créer un compte
-                </Button>
-              </motion.div>
-            </Box>
+                  Achetez et vendez des produits agricoles frais directement
+                  de la ferme à votre table via notre plateforme innovante.
+                </Typography>
 
-            {/* Stats animées */}
-            <Grid container spacing={3} sx={{ mt: 4 }}>
-              {stats.map((stat, index) => (
-                <Grid item xs={12} sm={4} key={index}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.8 + index * 0.1 }}
-                    whileHover={{ scale: 1.05, y: -8 }}
+                <Box sx={{ display: 'flex', gap: 2, mb: 6, flexWrap: 'wrap' }}>
+                  <Button
+                    component={Link}
+                    to="/products"
+                    variant="contained"
+                    size="large"
+                    sx={{
+                      bgcolor: '#ffa726',
+                      color: 'white',
+                      px: 5,
+                      py: 2,
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      borderRadius: '10px',
+                      textTransform: 'none',
+                      boxShadow: '0 4px 15px rgba(255, 167, 38, 0.4)',
+                      '&:hover': {
+                        bgcolor: '#fb8c00',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 6px 20px rgba(255, 167, 38, 0.5)'
+                      },
+                      transition: 'all 0.3s'
+                    }}
                   >
-                    <Card
+                    Découvrir les produits
+                  </Button>
+
+                  <Button
+                    component={Link}
+                    to="/register"
+                    variant="outlined"
+                    size="large"
+                    sx={{
+                      borderColor: 'white',
+                      color: 'white',
+                      px: 5,
+                      py: 2,
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      borderRadius: '10px',
+                      borderWidth: 2,
+                      textTransform: 'none',
+                      '&:hover': {
+                        borderWidth: 2,
+                        bgcolor: 'rgba(255,255,255,0.1)',
+                        transform: 'translateY(-2px)'
+                      },
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    Créer un compte
+                  </Button>
+                </Box>
+
+                {/* Badges de paiement */}
+                <Box
+                  sx={{
+                    bgcolor: 'white',
+                    borderRadius: '12px',
+                    p: 2.5,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box
                       sx={{
-                        bgcolor: 'white',
-                        borderRadius: '20px',
-                        p: 3,
-                        textAlign: 'center',
-                        boxShadow: '0 8px 30px rgba(16, 185, 129, 0.2)',
-                        border: '3px solid #86efac',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s',
-                        '&:hover': {
-                          borderColor: '#10b981',
-                          boxShadow: '0 12px 40px rgba(16, 185, 129, 0.3)'
-                        }
+                        bgcolor: '#FFD700',
+                        color: 'black',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.85rem'
                       }}
                     >
-                      <Typography sx={{ fontSize: '3rem', mb: 1 }}>
-                        {stat.emoji}
-                      </Typography>
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity, delay: index * 0.3 }}
-                      >
-                        <Typography
-                          variant="h3"
-                          sx={{
-                            fontWeight: 900,
-                            background: 'linear-gradient(135deg, #10b981, #059669)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            backgroundClip: 'text',
-                            mb: 1
-                          }}
-                        >
-                          {stat.value}
-                        </Typography>
-                      </motion.div>
-                      <Typography sx={{ color: '#15803d', fontWeight: 600 }}>
-                        {stat.label}
-                      </Typography>
-                    </Card>
-                  </motion.div>
-                </Grid>
-              ))}
+                      MTN
+                    </Box>
+                    <Box
+                      sx={{
+                        bgcolor: '#FF6600',
+                        color: 'white',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      Orange Money
+                    </Box>
+                    <Box
+                      sx={{
+                        bgcolor: '#003087',
+                        color: 'white',
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      PayPal
+                    </Box>
+                  </Box>
+                  <Box sx={{ borderLeft: '2px solid #e0e0e0', pl: 2, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography sx={{ color: '#2d7a3e', fontWeight: 700, fontSize: '1.1rem' }}>
+                      ★ TrustPilot
+                    </Typography>
+                    <Typography sx={{ color: '#000', fontWeight: 600, ml: 1 }}>
+                      4.8 ★★★
+                    </Typography>
+                  </Box>
+                </Box>
+              </motion.div>
             </Grid>
-          </motion.div>
+          </Grid>
         </Container>
 
         {/* Vague décorative */}
-        <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, lineHeight: 0 }}>
-          <svg viewBox="0 0 1440 120" style={{ width: '100%' }}>
-            <motion.path
-              fill="#f0fdf4"
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: -2,
+            left: 0,
+            right: 0,
+            lineHeight: 0
+          }}
+        >
+          <svg viewBox="0 0 1440 120" style={{ width: '100%', display: 'block' }}>
+            <path
+              fill="#f5f5f5"
               d="M0,64L48,69.3C96,75,192,85,288,80C384,75,480,53,576,48C672,43,768,53,864,58.7C960,64,1056,64,1152,58.7C1248,53,1344,43,1392,37.3L1440,32L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z"
-              animate={{
-                d: [
-                  "M0,64L48,69.3C96,75,192,85,288,80C384,75,480,53,576,48C672,43,768,53,864,58.7C960,64,1056,64,1152,58.7C1248,53,1344,43,1392,37.3L1440,32L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z",
-                  "M0,32L48,37.3C96,43,192,53,288,58.7C384,64,480,64,576,58.7C672,53,768,43,864,48C960,53,1056,75,1152,80C1248,85,1344,75,1392,69.3L1440,64L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z",
-                  "M0,64L48,69.3C96,75,192,85,288,80C384,75,480,53,576,48C672,43,768,53,864,58.7C960,64,1056,64,1152,58.7C1248,53,1344,43,1392,37.3L1440,32L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z"
-                ]
-              }}
-              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
             />
           </svg>
         </Box>
       </Box>
 
       {/* Features Section */}
-      <Box
-        component="section"
-        sx={{
-          py: 12,
-          bgcolor: '#f0fdf4',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
-      >
-        {/* Cercles décoratifs */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '10%',
-            right: '5%',
-            width: '300px',
-            height: '300px',
-            background: 'linear-gradient(135deg, #d1fae5, #a7f3d0)',
-            borderRadius: '50%',
-            opacity: 0.3,
-            filter: 'blur(80px)'
-          }}
-        />
-
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
+      <Box sx={{ py: 10, bgcolor: '#f5f5f5' }}>
+        <Container maxWidth="lg">
+          <Typography
+            variant="h3"
+            sx={{
+              textAlign: 'center',
+              fontWeight: 700,
+              color: '#2d5f3c',
+              mb: 8
+            }}
           >
-            <Box sx={{ textAlign: 'center', mb: 8 }}>
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                style={{ display: 'inline-block' }}
-              >
-                <Typography sx={{ fontSize: '4rem', mb: 2 }}>🌟</Typography>
-              </motion.div>
-              <Typography
-                variant="h4"
-                component="h2"
-                sx={{
-                  fontWeight: 900,
-                  color: '#15803d',
-                  mb: 2
-                }}
-              >
-                Pourquoi choisir TERRABIA ?
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  color: '#16a34a',
-                  maxWidth: 600,
-                  mx: 'auto'
-                }}
-              >
-                Découvrez tous les avantages de notre plateforme innovante
-              </Typography>
-            </Box>
-          </motion.div>
+            Pourquoi choisir TERRABIA ?
+          </Typography>
 
           <Grid container spacing={4}>
-            {features.map((feature, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
+            {features.slice(0, 2).map((feature, index) => (
+              <Grid item xs={12} md={6} key={index}>
                 <motion.div
-                  initial={{ opacity: 0, y: 50 }}
+                  initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  onHoverStart={() => setHoveredCard(index)}
-                  onHoverEnd={() => setHoveredCard(null)}
+                  transition={{ delay: index * 0.1 }}
                 >
                   <Card
                     sx={{
                       height: '100%',
-                      borderRadius: '25px',
-                      boxShadow: '0 8px 30px rgba(16, 185, 129, 0.15)',
-                      border: '3px solid #a7f3d0',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                      borderRadius: '16px',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                      border: '1px solid #e8e8e8',
+                      transition: 'all 0.3s',
                       '&:hover': {
-                        transform: 'translateY(-15px) scale(1.02)',
-                        boxShadow: `0 20px 50px ${feature.color}40`,
-                        borderColor: feature.color
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 8px 30px rgba(45, 122, 62, 0.15)'
                       }
                     }}
                   >
-                    {/* Effet de brillance */}
-                    {hoveredCard === index && (
-                      <motion.div
-                        initial={{ x: '-100%' }}
-                        animate={{ x: '100%' }}
-                        transition={{ duration: 0.8 }}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
-                          zIndex: 1,
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    )}
-
-                    <CardContent sx={{ p: 4, textAlign: 'center', position: 'relative', zIndex: 2 }}>
-                      <motion.div
-                        animate={
-                          hoveredCard === index
-                            ? { rotate: 360, scale: [1, 1.2, 1] }
-                            : {}
-                        }
-                        transition={{ duration: 0.6 }}
-                      >
-                        <Box
-                          sx={{
-                            width: 100,
-                            height: 100,
-                            borderRadius: '50%',
-                            background: `linear-gradient(135deg, ${feature.color}30, ${feature.color}60)`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            mx: 'auto',
-                            mb: 3,
-                            color: feature.color,
-                            transition: 'all 0.3s',
-                            '&:hover': {
-                              background: `linear-gradient(135deg, ${feature.color}, ${feature.color})`
-                            }
-                          }}
-                        >
-                          {feature.icon}
-                        </Box>
-                      </motion.div>
-
-                      <Typography
+                    <CardContent sx={{ p: 5, textAlign: 'center' }}>
+                      <Box
                         sx={{
-                          fontSize: '2rem',
-                          mb: 2
+                          width: 80,
+                          height: 80,
+                          borderRadius: '50%',
+                          bgcolor: '#e8f5e9',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mx: 'auto',
+                          mb: 3
                         }}
                       >
-                        {feature.emoji}
-                      </Typography>
-
+                        {feature.icon}
+                      </Box>
                       <Typography
-                        variant="h6"
-                        component="h3"
+                        variant="h5"
                         sx={{
                           fontWeight: 700,
-                          color: '#15803d',
+                          color: '#2d5f3c',
                           mb: 2
                         }}
                       >
                         {feature.title}
                       </Typography>
-
                       <Typography
-                        variant="body2"
                         sx={{
-                          color: '#166534',
+                          color: '#666',
                           lineHeight: 1.7
                         }}
                       >
                         {feature.description}
                       </Typography>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Grid>
+            ))}
+          </Grid>
 
-                      {/* Confettis */}
-                      {hoveredCard === index && (
-                        <>
-                          {[...Array(6)].map((_, i) => (
-                            <motion.div
-                              key={i}
-                              initial={{
-                                x: '50%',
-                                y: '50%',
-                                scale: 0
-                              }}
-                              animate={{
-                                x: `${Math.cos((i * 60 * Math.PI) / 180) * 100}%`,
-                                y: `${Math.sin((i * 60 * Math.PI) / 180) * 100}%`,
-                                scale: [0, 1, 0]
-                              }}
-                              transition={{ duration: 0.6 }}
-                              style={{
-                                position: 'absolute',
-                                width: '8px',
-                                height: '8px',
-                                background: feature.color,
-                                borderRadius: '50%'
-                              }}
-                            />
-                          ))}
-                        </>
-                      )}
+          <Grid container spacing={4} sx={{ mt: 2 }}>
+            {features.slice(2).map((feature, index) => (
+              <Grid item xs={12} md={4} key={index}>
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: (index + 2) * 0.1 }}
+                >
+                  <Card
+                    sx={{
+                      height: '100%',
+                      borderRadius: '16px',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                      border: '1px solid #e8e8e8',
+                      transition: 'all 0.3s',
+                      '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 8px 30px rgba(45, 122, 62, 0.15)'
+                      }
+                    }}
+                  >
+                    <CardContent sx={{ p: 4, textAlign: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 70,
+                          height: 70,
+                          borderRadius: '50%',
+                          bgcolor: '#e8f5e9',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mx: 'auto',
+                          mb: 3
+                        }}
+                      >
+                        {feature.icon}
+                      </Box>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 700,
+                          color: '#2d5f3c',
+                          mb: 2
+                        }}
+                      >
+                        {feature.title}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: '#666',
+                          lineHeight: 1.7
+                        }}
+                      >
+                        {feature.description}
+                      </Typography>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -578,143 +468,407 @@ const Home = () => {
         </Container>
       </Box>
 
-      {/* CTA Section */}
+      {/* Testimonials Section - CARROUSEL ANIMÉ */}
       <Box
-        component="section"
         sx={{
-          py: 12,
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+          py: 10,
+          background: 'linear-gradient(135deg, rgba(232, 245, 233, 0.6) 0%, rgba(200, 230, 201, 0.6) 100%)',
           position: 'relative',
           overflow: 'hidden'
         }}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
       >
-        {/* Bulles flottantes */}
-        {[...Array(10)].map((_, i) => (
-          <motion.div
-            key={i}
-            style={{
-              position: 'absolute',
-              width: Math.random() * 100 + 50,
-              height: Math.random() * 100 + 50,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.1)',
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`
-            }}
-            animate={{
-              y: [0, -40, 0],
-              x: [0, Math.random() * 30 - 15, 0],
-              scale: [1, 1.2, 1]
-            }}
-            transition={{
-              duration: 4 + Math.random() * 3,
-              repeat: Infinity,
-              delay: i * 0.3
-            }}
-          />
-        ))}
+        {/* Cercles décoratifs animés */}
+        <motion.div
+          style={{
+            position: 'absolute',
+            top: '20%',
+            left: '5%',
+            width: '200px',
+            height: '200px',
+            background: 'linear-gradient(135deg, #c8e6c9, #a5d6a7)',
+            borderRadius: '50%',
+            opacity: 0.3,
+            filter: 'blur(60px)'
+          }}
+          animate={{
+            scale: [1, 1.2, 1],
+            x: [0, 30, 0],
+            y: [0, -30, 0]
+          }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
 
-        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
           >
-            <Box sx={{ textAlign: 'center' }}>
+            <Box sx={{ textAlign: 'center', mb: 8 }}>
               <motion.div
-                animate={{
-                  rotate: [0, 10, -10, 0],
-                  scale: [1, 1.2, 1]
-                }}
+                animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
                 style={{ display: 'inline-block' }}
               >
-                <Typography sx={{ fontSize: '5rem', mb: 3 }}>🎉</Typography>
+                <Typography sx={{ fontSize: '4rem', mb: 2 }}>💬</Typography>
               </motion.div>
-
               <Typography
-                variant="h4"
-                component="h2"
+                variant="h3"
                 sx={{
-                  fontWeight: 900,
-                  color: 'white',
-                  mb: 3
+                  fontWeight: 700,
+                  color: '#2d5f3c',
+                  mb: 2
                 }}
               >
-                Prêt à rejoindre notre communauté ?
+                Ce que disent nos clients
               </Typography>
-
               <Typography
-                variant="body1"
+                variant="h6"
                 sx={{
-                  color: 'rgba(255,255,255,0.95)',
-                  mb: 5,
-                  fontSize: '1.2rem',
+                  color: '#2d7a3e',
                   maxWidth: 600,
-                  mx: 'auto',
-                  lineHeight: 1.8
+                  mx: 'auto'
                 }}
               >
-                Que vous soyez agriculteur cherchant à vendre vos produits ou
-                consommateur à la recherche de produits frais, TERRABIA est fait pour vous! 🌱
+                Découvrez les avis de notre communauté
               </Typography>
-
-              <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <motion.div whileHover={{ scale: 1.1, y: -8 }} whileTap={{ scale: 0.95 }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    component={Link}
-                    to="/register?type=farmer"
-                    sx={{
-                      bgcolor: 'white',
-                      color: '#10b981',
-                      fontWeight: 700,
-                      px: 5,
-                      py: 2.5,
-                      fontSize: '1.1rem',
-                      borderRadius: '15px',
-                      textTransform: 'none',
-                      boxShadow: '0 8px 30px rgba(255,255,255,0.3)',
-                      '&:hover': {
-                        bgcolor: '#f0fdf4'
-                      }
-                    }}
-                  >
-                    🚜 Devenir Agriculteur
-                  </Button>
-                </motion.div>
-
-                <motion.div whileHover={{ scale: 1.1, y: -8 }} whileTap={{ scale: 0.95 }}>
-                  <Button
-                    variant="outlined"
-                    size="large"
-                    component={Link}
-                    to="/register?type=customer"
-                    sx={{
-                      borderColor: 'white',
-                      borderWidth: 3,
-                      color: 'white',
-                      fontWeight: 700,
-                      px: 5,
-                      py: 2.5,
-                      fontSize: '1.1rem',
-                      borderRadius: '15px',
-                      textTransform: 'none',
-                      backdropFilter: 'blur(10px)',
-                      '&:hover': {
-                        borderWidth: 3,
-                        bgcolor: 'rgba(255,255,255,0.15)'
-                      }
-                    }}
-                  >
-                    🛍️ Devenir Client
-                  </Button>
-                </motion.div>
-              </Box>
             </Box>
           </motion.div>
+
+          {/* Carrousel */}
+          <Box
+            sx={{
+              position: 'relative',
+              maxWidth: 900,
+              mx: 'auto',
+              minHeight: 420
+            }}
+          >
+            <AnimatePresence initial={false} custom={direction} mode="wait">
+              <motion.div
+                key={currentTestimonial}
+                custom={direction}
+                variants={testimonialVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{
+                  x: { type: 'spring', stiffness: 300, damping: 30 },
+                  opacity: { duration: 0.3 },
+                  scale: { duration: 0.3 }
+                }}
+                style={{ position: 'absolute', width: '100%' }}
+              >
+                <Card
+                  sx={{
+                    borderRadius: '20px',
+                    boxShadow: '0 8px 30px rgba(45, 122, 62, 0.2)',
+                    border: '2px solid #c8e6c9',
+                    bgcolor: 'white',
+                    overflow: 'visible',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Badge vérifié */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: -15,
+                      right: 30,
+                      bgcolor: '#2d7a3e',
+                      color: 'white',
+                      px: 3,
+                      py: 1,
+                      borderRadius: '20px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 15px rgba(45, 122, 62, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5
+                    }}
+                  >
+                    ✓ Témoignage Vérifié
+                  </Box>
+
+                  <CardContent sx={{ p: 5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.05, 1]
+                        }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <Avatar
+                          sx={{
+                            width: 90,
+                            height: 90,
+                            bgcolor: '#e8f5e9',
+                            fontSize: '2.5rem',
+                            mr: 3,
+                            border: '3px solid #2d7a3e',
+                            boxShadow: '0 4px 20px rgba(45, 122, 62, 0.2)'
+                          }}
+                        >
+                          {testimonials[currentTestimonial].avatar}
+                        </Avatar>
+                      </motion.div>
+                      <Box>
+                        <Typography
+                          variant="h5"
+                          sx={{
+                            fontWeight: 800,
+                            color: '#2d5f3c',
+                            mb: 0.5
+                          }}
+                        >
+                          {testimonials[currentTestimonial].name}
+                        </Typography>
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            color: '#2d7a3e',
+                            fontWeight: 600
+                          }}
+                        >
+                          {testimonials[currentTestimonial].role}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Guillemets décoratifs */}
+                    <Box sx={{ position: 'relative', pl: 4, pr: 2 }}>
+                      <Typography
+                        sx={{
+                          position: 'absolute',
+                          top: -20,
+                          left: 0,
+                          fontSize: '5rem',
+                          color: '#c8e6c9',
+                          lineHeight: 1,
+                          fontFamily: 'Georgia, serif'
+                        }}
+                      >
+                        "
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          color: '#555',
+                          fontSize: '1.2rem',
+                          lineHeight: 2,
+                          fontStyle: 'italic',
+                          mb: 3,
+                          position: 'relative'
+                        }}
+                      >
+                        {testimonials[currentTestimonial].text}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Rating
+                        value={testimonials[currentTestimonial].rating}
+                        readOnly
+                        sx={{ color: '#ffa726', fontSize: '2rem' }}
+                      />
+                      <Typography
+                        sx={{
+                          color: '#2d5f3c',
+                          fontWeight: 700,
+                          fontSize: '1.1rem'
+                        }}
+                      >
+                        {testimonials[currentTestimonial].rating}/5
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Flèches de navigation */}
+            <IconButton
+              onClick={handlePreviousTestimonial}
+              sx={{
+                position: 'absolute',
+                left: { xs: -20, md: -70 },
+                top: '50%',
+                transform: 'translateY(-50%)',
+                bgcolor: 'white',
+                border: '3px solid #2d7a3e',
+                color: '#2d7a3e',
+                width: { xs: 50, md: 60 },
+                height: { xs: 50, md: 60 },
+                boxShadow: '0 4px 20px rgba(45, 122, 62, 0.3)',
+                '&:hover': {
+                  bgcolor: '#2d7a3e',
+                  color: 'white',
+                  transform: 'translateY(-50%) scale(1.1)'
+                },
+                transition: 'all 0.3s'
+              }}
+            >
+              <ChevronLeft sx={{ fontSize: 35 }} />
+            </IconButton>
+
+            <IconButton
+              onClick={handleNextTestimonial}
+              sx={{
+                position: 'absolute',
+                right: { xs: -20, md: -70 },
+                top: '50%',
+                transform: 'translateY(-50%)',
+                bgcolor: 'white',
+                border: '3px solid #2d7a3e',
+                color: '#2d7a3e',
+                width: { xs: 50, md: 60 },
+                height: { xs: 50, md: 60 },
+                boxShadow: '0 4px 20px rgba(45, 122, 62, 0.3)',
+                '&:hover': {
+                  bgcolor: '#2d7a3e',
+                  color: 'white',
+                  transform: 'translateY(-50%) scale(1.1)'
+                },
+                transition: 'all 0.3s'
+              }}
+            >
+              <ChevronRight sx={{ fontSize: 35 }} />
+            </IconButton>
+          </Box>
+
+          {/* Indicateurs de position */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 1.5,
+              mt: 6
+            }}
+          >
+            {testimonials.map((_, index) => (
+              <motion.div
+                key={index}
+                onClick={() => {
+                  setDirection(index > currentTestimonial ? 1 : -1)
+                  setCurrentTestimonial(index)
+                }}
+                style={{ cursor: 'pointer' }}
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <Box
+                  sx={{
+                    width: currentTestimonial === index ? 40 : 12,
+                    height: 12,
+                    borderRadius: 6,
+                    bgcolor: currentTestimonial === index ? '#2d7a3e' : '#c8e6c9',
+                    transition: 'all 0.3s',
+                    boxShadow: currentTestimonial === index ? '0 2px 8px rgba(45, 122, 62, 0.4)' : 'none'
+                  }}
+                />
+              </motion.div>
+            ))}
+          </Box>
+
+          {/* Info défilement */}
+          <Box
+            sx={{
+              textAlign: 'center',
+              mt: 3,
+              color: '#2d7a3e',
+              fontSize: '0.9rem',
+              fontWeight: 600
+            }}
+          >
+            {isPaused ? '⏸️ Pause (survol)' : '▶️ Défilement automatique'}
+          </Box>
+        </Container>
+      </Box>
+
+      {/* CTA Section */}
+      <Box
+        sx={{
+          py: 10,
+          background: 'linear-gradient(135deg, #2d7a3e 0%, #1e5a2e 100%)',
+          color: 'white'
+        }}
+      >
+        <Container maxWidth="md">
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 700,
+                mb: 3
+              }}
+            >
+              Prêt à rejoindre notre communauté ?
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 5,
+                opacity: 0.95,
+                fontWeight: 400
+              }}
+            >
+              Que vous soyez agriculteur cherchant à vendre vos produits ou
+              consommateur à la recherche de produits frais, TERRABIA est fait pour vous.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                component={Link}
+                to="/register?type=farmer"
+                variant="contained"
+                size="large"
+                sx={{
+                  bgcolor: 'white',
+                  color: '#2d7a3e',
+                  px: 5,
+                  py: 2,
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  borderRadius: '10px',
+                  textTransform: 'none',
+                  '&:hover': {
+                    bgcolor: '#f5f5f5',
+                    transform: 'translateY(-2px)'
+                  },
+                  transition: 'all 0.3s'
+                }}
+              >
+                Devenir Agriculteur
+              </Button>
+              <Button
+                component={Link}
+                to="/register?type=customer"
+                variant="outlined"
+                size="large"
+                sx={{
+                  borderColor: 'white',
+                  color: 'white',
+                  px: 5,
+                  py: 2,
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  borderRadius: '10px',
+                  borderWidth: 2,
+                  textTransform: 'none',
+                  '&:hover': {
+                    borderWidth: 2,
+                    bgcolor: 'rgba(255,255,255,0.1)',
+                    transform: 'translateY(-2px)'
+                  },
+                  transition: 'all 0.3s'
+                }}
+              >
+                Devenir Client
+              </Button>
+            </Box>
+          </Box>
         </Container>
       </Box>
     </Box>
