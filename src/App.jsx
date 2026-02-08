@@ -18,6 +18,7 @@ import DeliveryDashboard from './pages/delivery/Dashboard'
 import About from './pages/About'
 import Terms from './pages/Terms'
 import Contact from './pages/Contact'
+import Checkout from './pages/customer/checkout'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="about" element={<About />} />
           <Route path="terms" element={<Terms />} />
           <Route path="contact" element={<Contact />} />
+          <Route path="/checkout" element={<Checkout />} />
           
           {/* Routes protégées pour agriculteurs */}
           <Route path="farmer" element={

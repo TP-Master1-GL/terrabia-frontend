@@ -1,521 +1,449 @@
-// components/Farmer/ProductForm.js - Version corrigée
-import React, { useState, useRef, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
+// components/farmer/ProductForm.jsx
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
-  Button,
-  Typography,
-  Alert,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Grid,
-  Paper,
-  IconButton,
+  Button,
+  Typography,
+  Alert,
   CircularProgress,
-  Chip
-} from '@mui/material'
+  Paper,
+  Grid,
+  IconButton,
+  InputAdornment
+} from '@mui/material';
 import {
-  AddPhotoAlternate,
-  Delete,
-  Image,
-  Category
-} from '@mui/icons-material'
-import ApiService from '../../services/apiService'
+  Add,
+  Clear,
+  CloudUpload
+} from '@mui/icons-material';
+import ApiService from '../../services/apiService';
+import CategoryManager from './CategoryManager';
 
-// Schéma de validation
-const productSchema = yup.object({
-  name: yup.string().required('Le nom du produit est requis'),
-  category_id: yup.number()
-    .required('La catégorie est requise')
-    .typeError('Veuillez sélectionner une catégorie'),
-  price: yup.number()
-    .positive('Le prix doit être positif')
-    .required('Le prix est requis')
-    .typeError('Le prix doit être un nombre'),
-  stock: yup.number()
-    .positive('La quantité doit être positive')
-    .integer('La quantité doit être un nombre entier')
-    .required('La quantité est requise')
-    .typeError('La quantité doit être un nombre'),
-  unit: yup.string().required('L\'unité est requise'),
-  description: yup.string().required('La description est requise'),
-})
+const ProductForm = ({ onSubmit, initialData = null, onCancel, loading = false }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    unit: '',
+    stock: '',
+    category_id: '',
+    available: true,
+    image: null
+  });
 
-const ProductForm = ({ onSubmit, initialData, onCancel, loading }) => {
-  const [mediaFiles, setMediaFiles] = useState([])
-  const [mediaError, setMediaError] = useState('')
-  const [categories, setCategories] = useState([])
-  const [categoriesLoading, setCategoriesLoading] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState(null)
-  const fileInputRef = useRef(null)
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageError, setImageError] = useState('');
+  const [localLoading, setLocalLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-    watch,
-  } = useForm({
-    resolver: yupResolver(productSchema),
-    defaultValues: initialData || {
-      unit: 'kg',
-      available: true,
-      price: '',
-      stock: '',
-      category_id: ''
-    }
-  })
-
-  // Observer la catégorie sélectionnée
-  const categoryId = watch('category_id')
-
-  // Charger les catégories de manière hiérarchique
-  useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        setCategoriesLoading(true)
-        const categoriesData = await ApiService.getCategories()
-        
-        if (Array.isArray(categoriesData)) {
-          setCategories(categoriesData)
-        } else {
-          // Si l'API retourne un format différent
-          setCategories([])
-          console.error('Format de catégories non supporté:', categoriesData)
-        }
-      } catch (error) {
-        console.error('Error loading categories:', error)
-        // Catégories par défaut en cas d'erreur
-        setCategories([
-          { 
-            id: 1, 
-            name: 'Fruits',
-            subcategories: [
-              { id: 2, name: 'Agrumes' },
-              { id: 3, name: 'Fruits Rouges' },
-              { id: 4, name: 'Fruits Exotiques' }
-            ]
-          },
-          { 
-            id: 5, 
-            name: 'Légumes',
-            subcategories: [
-              { id: 6, name: 'Légumes Racines' },
-              { id: 7, name: 'Légumes Feuilles' },
-              { id: 8, name: 'Légumes Fruits' }
-            ]
-          }
-        ])
-      } finally {
-        setCategoriesLoading(false)
-      }
-    }
-    
-    loadCategories()
-  }, [])
-
-  // Initialiser les valeurs si modification
+  // Initialiser le formulaire avec les données existantes si en mode édition
   useEffect(() => {
     if (initialData) {
-      console.log('Initial data in form:', initialData)
+      setFormData({
+        name: initialData.name || '',
+        description: initialData.description || '',
+        price: initialData.price || '',
+        unit: initialData.unit || '',
+        stock: initialData.stock || '',
+        category_id: initialData.category_id || '',
+        available: initialData.available !== undefined ? initialData.available : true,
+        image: null
+      });
       
-      Object.keys(initialData).forEach(key => {
-        if (key === 'category' && initialData.category) {
-          setValue('category_id', initialData.category.id)
-          setSelectedCategory(initialData.category)
-        } else if (key === 'images' && Array.isArray(initialData.images)) {
-          // Gérer les images existantes si modification
-          const existingImages = initialData.images.map(img => ({
-            preview: img.image,
-            name: `image-${img.id}.jpg`,
-            isExisting: true
-          }))
-          setMediaFiles(existingImages)
-        } else {
-          setValue(key, initialData[key])
-        }
-      })
+      if (initialData.image_url) {
+        setImagePreview(initialData.image_url);
+      }
     }
-  }, [initialData, setValue])
+  }, [initialData]);
 
-  // Mettre à jour la catégorie sélectionnée
+  // Charger les catégories
   useEffect(() => {
-    if (categoryId) {
-      const findCategory = (cats, id) => {
-        for (const cat of cats) {
-          if (cat.id === parseInt(id)) {
-            return cat
-          }
-          if (cat.subcategories && Array.isArray(cat.subcategories)) {
-            const found = findCategory(cat.subcategories, id)
-            if (found) return found
-          }
-        }
-        return null
-      }
-      setSelectedCategory(findCategory(categories, categoryId))
-    } else {
-      setSelectedCategory(null)
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      const data = await ApiService.getCategories();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Erreur chargement catégories:', err);
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
     }
-  }, [categoryId, categories])
+  };
 
-  const handleMediaUpload = (event) => {
-    const files = Array.from(event.target.files)
-    
-    if (files.length + mediaFiles.length > 10) {
-      setMediaError('Maximum 10 images autorisées')
-      return
-    }
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === 'checkbox' ? checked : value
+    });
+  };
 
-    const maxSize = 5 * 1024 * 1024 // 5MB
-    const oversizedFiles = files.filter(file => file.size > maxSize)
-    
-    if (oversizedFiles.length > 0) {
-      setMediaError('Fichier(s) trop volumineux. Maximum: 5MB par fichier')
-      return
-    }
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    const newMedia = files.map(file => ({
-      file,
-      preview: URL.createObjectURL(file),
-      name: file.name,
-      isExisting: false
-    }))
-
-    setMediaFiles(prev => [...prev, ...newMedia])
-    setMediaError('')
-  }
-
-  const removeMedia = (index) => {
-    const media = mediaFiles[index]
-    if (media.preview && !media.isExisting) {
-      URL.revokeObjectURL(media.preview)
-    }
-    setMediaFiles(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const handleFormSubmit = async (data) => {
-    console.log('Données du formulaire:', data)
-    
-    if (mediaFiles.length === 0 && !initialData?.images?.length) {
-      setMediaError('Au moins une photo est requise')
-      return
+    // Vérification du type de fichier
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setImageError('Format d\'image non supporté. Utilisez JPG, PNG ou GIF.');
+      return;
     }
 
-    // Créer un FormData
-    const formData = new FormData()
-    
-    // Ajouter les données de base
-    formData.append('name', data.name)
-    formData.append('category_id', data.category_id)
-    formData.append('price', data.price.toString())
-    formData.append('stock', data.stock.toString())
-    formData.append('unit', data.unit)
-    formData.append('description', data.description)
-    formData.append('available', 'true')
-
-    // Ajouter les nouvelles images seulement
-    mediaFiles.forEach(media => {
-      if (!media.isExisting && media.file) {
-        formData.append('images', media.file)
-      }
-    })
-
-    console.log('FormData prêt pour envoi:')
-    for (let [key, value] of formData.entries()) {
-      console.log(`${key}: ${value}`)
+    // Vérification de la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('L\'image est trop volumineuse (max 5MB).');
+      return;
     }
+
+    setImageError('');
+    setFormData({
+      ...formData,
+      image: file
+    });
+
+    // Créer une preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLocalLoading(true);
 
     try {
-      await onSubmit(formData)
-    } catch (error) {
-      console.error('Error submitting form:', error)
-      
-      // Afficher l'erreur spécifique
-      let errorMessage = 'Une erreur est survenue'
-      if (error.message) {
-        errorMessage = error.message
-      } else if (error.response?.data) {
-        if (typeof error.response.data === 'object') {
-          const errorData = error.response.data
-          const messages = []
-          Object.keys(errorData).forEach(key => {
-            if (Array.isArray(errorData[key])) {
-              messages.push(...errorData[key])
-            } else {
-              messages.push(errorData[key])
-            }
-          })
-          errorMessage = messages.join(', ')
-        } else {
-          errorMessage = error.response.data
-        }
+      // Validation
+      if (!formData.name.trim()) {
+        throw new Error('Le nom du produit est requis');
       }
+      if (!formData.description.trim()) {
+        throw new Error('La description est requise');
+      }
+      if (!formData.price || parseFloat(formData.price) <= 0) {
+        throw new Error('Le prix doit être supérieur à 0');
+      }
+      if (!formData.unit.trim()) {
+        throw new Error('L\'unité est requise');
+      }
+      if (!formData.stock || parseInt(formData.stock) < 0) {
+        throw new Error('Le stock doit être un nombre positif');
+      }
+      if (!formData.category_id) {
+        throw new Error('Veuillez sélectionner une catégorie');
+      }
+
+      // Préparer les données pour l'envoi
+      const formDataToSend = new FormData();
       
-      setMediaError(errorMessage)
-      throw error
-    }
-  }
+      // Ajouter les champs textuels
+      formDataToSend.append('name', formData.name.trim());
+      formDataToSend.append('description', formData.description.trim());
+      formDataToSend.append('price', parseFloat(formData.price));
+      formDataToSend.append('unit', formData.unit.trim());
+      formDataToSend.append('stock', parseInt(formData.stock));
+      formDataToSend.append('category_id', formData.category_id);
+      formDataToSend.append('available', formData.available);
+      
+      // Ajouter l'image si elle existe (nouvelle ou modifiée)
+      if (formData.image) {
+        formDataToSend.append('image', formData.image);
+      } else if (initialData?.image_url && !imagePreview?.startsWith('data:')) {
+        // Si on garde l'image existante
+        formDataToSend.append('keep_existing_image', 'true');
+      }
 
-  // Fonction pour afficher les catégories de manière récursive
-  const renderCategoryOptions = (categories, depth = 0) => {
-    if (!Array.isArray(categories) || categories.length === 0) {
-      return null
+      // Appeler la fonction onSubmit du parent
+      await onSubmit(formDataToSend);
+      
+    } catch (error) {
+      console.error('Erreur validation:', error);
+      alert(error.message);
+    } finally {
+      setLocalLoading(false);
     }
+  };
 
-    return categories.map(category => (
-      <React.Fragment key={category.id}>
-        <MenuItem value={category.id} sx={{ pl: depth * 3 }}>
-          {depth > 0 ? '— '.repeat(depth) : ''}{category.name}
-        </MenuItem>
-        {category.subcategories && category.subcategories.length > 0 && 
-          renderCategoryOptions(category.subcategories, depth + 1)
-        }
-      </React.Fragment>
-    ))
-  }
+  const clearImage = () => {
+    setFormData({
+      ...formData,
+      image: null
+    });
+    setImagePreview(null);
+    setImageError('');
+  };
+
+  const handleCategoryCreated = async () => {
+    await loadCategories();
+    // Optionnel: sélectionner automatiquement la nouvelle catégorie
+  };
 
   return (
-    <Paper sx={{ p: 3 }}>
+    <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h5" gutterBottom>
         {initialData ? 'Modifier le Produit' : 'Ajouter un Nouveau Produit'}
       </Typography>
 
-      {mediaError && !errors.category_id && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {mediaError}
-        </Alert>
-      )}
-
-      <Box component="form" onSubmit={handleSubmit(handleFormSubmit)}>
+      <form onSubmit={handleSubmit}>
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          {/* Informations de base */}
+          <Grid item xs={12}>
             <TextField
+              label="Nom du produit *"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
               fullWidth
-              label="Nom du Produit"
-              {...register('name')}
-              error={!!errors.name}
-              helperText={errors.name?.message}
-              disabled={loading}
+              required
+              disabled={loading || localLoading}
             />
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth error={!!errors.category_id}>
-              <InputLabel>Catégorie</InputLabel>
-              <Select
-                {...register('category_id')}
-                label="Catégorie"
-                defaultValue=""
-                disabled={categoriesLoading || loading}
-              >
-                <MenuItem value="">
-                  <em>Sélectionnez une catégorie</em>
-                </MenuItem>
-                {categoriesLoading ? (
-                  <MenuItem disabled>
-                    <CircularProgress size={20} sx={{ mr: 1 }} />
-                    Chargement des catégories...
-                  </MenuItem>
-                ) : (
-                  renderCategoryOptions(categories)
-                )}
-              </Select>
-              {selectedCategory && (
-                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Category fontSize="small" color="action" />
-                  <Typography variant="caption" color="text.secondary">
-                    Catégorie: {selectedCategory.name}
-                    {selectedCategory.parent && ` (Sous-catégorie)`}
-                  </Typography>
-                </Box>
-              )}
-              {errors.category_id && (
-                <Typography variant="caption" color="error">
-                  {errors.category_id.message}
-                </Typography>
-              )}
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              label="Prix (FCFA)"
-              type="number"
-              inputProps={{ 
-                step: "0.01", 
-                min: "0",
-                placeholder: "0.00"
-              }}
-              {...register('price')}
-              error={!!errors.price}
-              helperText={errors.price?.message}
-              disabled={loading}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <TextField
-              fullWidth
-              label="Quantité en stock"
-              type="number"
-              inputProps={{ 
-                min: "0",
-                placeholder: "0"
-              }}
-              {...register('stock')}
-              error={!!errors.stock}
-              helperText={errors.stock?.message}
-              disabled={loading}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={4}>
-            <FormControl fullWidth error={!!errors.unit}>
-              <InputLabel>Unité</InputLabel>
-              <Select
-                {...register('unit')}
-                label="Unité"
-                defaultValue="kg"
-                disabled={loading}
-              >
-                <MenuItem value="kg">Kilogramme (kg)</MenuItem>
-                <MenuItem value="piece">Pièce</MenuItem>
-                <MenuItem value="sac">Sac</MenuItem>
-                <MenuItem value="litre">Litre (L)</MenuItem>
-                <MenuItem value="botte">Botte</MenuItem>
-              </Select>
-              {errors.unit && (
-                <Typography variant="caption" color="error">
-                  {errors.unit.message}
-                </Typography>
-              )}
-            </FormControl>
           </Grid>
 
           <Grid item xs={12}>
             <TextField
-              fullWidth
-              label="Description"
+              label="Description *"
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
               multiline
               rows={4}
-              {...register('description')}
-              error={!!errors.description}
-              helperText={errors.description?.message}
-              placeholder="Décrivez votre produit en détail..."
-              disabled={loading}
+              fullWidth
+              required
+              disabled={loading || localLoading}
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Photos du Produit
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Ajoutez au moins une photo de votre produit. Maximum 10 photos, 5MB par photo.
-              </Typography>
+          {/* Prix, Unité et Stock */}
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              label="Prix *"
+              name="price"
+              type="number"
+              value={formData.price}
+              onChange={handleInputChange}
+              fullWidth
+              required
+              disabled={loading || localLoading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">FCFA</InputAdornment>
+                )
+              }}
+            />
+          </Grid>
 
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              label="Unité *"
+              name="unit"
+              value={formData.unit}
+              onChange={handleInputChange}
+              fullWidth
+              required
+              disabled={loading || localLoading}
+              placeholder="Ex: kg, pièce, litre..."
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              label="Stock disponible *"
+              name="stock"
+              type="number"
+              value={formData.stock}
+              onChange={handleInputChange}
+              fullWidth
+              required
+              disabled={loading || localLoading}
+            />
+          </Grid>
+
+          {/* Catégorie */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              <FormControl fullWidth required disabled={loading || localLoading}>
+                <InputLabel>Catégorie *</InputLabel>
+                <Select
+                  name="category_id"
+                  value={formData.category_id}
+                  onChange={handleInputChange}
+                  label="Catégorie *"
+                >
+                  <MenuItem value="">
+                    <em>Sélectionner une catégorie</em>
+                  </MenuItem>
+                  {categoriesLoading ? (
+                    <MenuItem disabled>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Chargement des catégories...
+                    </MenuItem>
+                  ) : categories.length === 0 ? (
+                    <MenuItem disabled>
+                      Aucune catégorie disponible
+                    </MenuItem>
+                  ) : (
+                    categories.map((category) => (
+                      <MenuItem key={category.id} value={category.id}>
+                        {category.name}
+                        {category.parent_name && (
+                          <Typography 
+                            component="span" 
+                            variant="caption" 
+                            sx={{ ml: 1, color: 'text.secondary' }}
+                          >
+                            ({category.parent_name})
+                          </Typography>
+                        )}
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+              
+              <CategoryManager 
+                onCategoryCreated={handleCategoryCreated}
+                buttonText="Nouvelle"
+              />
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              * Champ obligatoire
+            </Typography>
+          </Grid>
+
+          {/* Upload d'image */}
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" gutterBottom>
+              Image du produit
+            </Typography>
+            
+            {imageError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {imageError}
+              </Alert>
+            )}
+            
+            <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+              {/* Zone d'upload */}
+              <Box
+                sx={{
+                  border: '2px dashed',
+                  borderColor: 'primary.main',
+                  borderRadius: 2,
+                  p: 3,
+                  textAlign: 'center',
+                  flex: 1,
+                  cursor: 'pointer',
+                  '&:hover': {
+                    borderColor: 'primary.dark',
+                    backgroundColor: 'action.hover'
+                  }
+                }}
+                onClick={() => document.getElementById('product-image-upload').click()}
+              >
+                <input
+                  id="product-image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  disabled={loading || localLoading}
+                />
+                
+                <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+                <Typography variant="body1">
+                  Cliquez pour télécharger une image
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  JPG, PNG ou GIF (max 5MB)
+                </Typography>
+              </Box>
+
+              {/* Preview de l'image */}
+              {imagePreview && (
+                <Box sx={{ position: 'relative' }}>
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    style={{
+                      width: 150,
+                      height: 150,
+                      objectFit: 'cover',
+                      borderRadius: 8
+                    }}
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={clearImage}
+                    sx={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      backgroundColor: 'white',
+                      boxShadow: 1,
+                      '&:hover': { backgroundColor: 'grey.100' }
+                    }}
+                  >
+                    <Clear fontSize="small" />
+                  </IconButton>
+                </Box>
+              )}
+            </Box>
+            
+            {initialData?.image_url && !imagePreview && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Image actuelle:
+                </Typography>
+                <img
+                  src={initialData.image_url}
+                  alt="Produit actuel"
+                  style={{
+                    width: 100,
+                    height: 100,
+                    objectFit: 'cover',
+                    borderRadius: 8,
+                    marginTop: 8
+                  }}
+                />
+              </Box>
+            )}
+          </Grid>
+
+          {/* Actions */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
               <Button
                 variant="outlined"
-                component="label"
-                startIcon={<Image />}
-                sx={{ mb: 2 }}
-                disabled={mediaFiles.length >= 10 || loading}
+                onClick={onCancel}
+                disabled={loading || localLoading}
               >
-                {mediaFiles.length === 0 ? 'Ajouter des Photos' : 'Ajouter Plus de Photos'}
-                <input
-                  type="file"
-                  hidden
-                  multiple
-                  accept="image/*"
-                  onChange={handleMediaUpload}
-                  ref={fileInputRef}
-                />
+                Annuler
               </Button>
-
-              {mediaFiles.length > 0 && (
-                <Grid container spacing={2}>
-                  {mediaFiles.map((media, index) => (
-                    <Grid item xs={6} sm={4} md={3} key={index}>
-                      <Box sx={{ position: 'relative' }}>
-                        <img
-                          src={media.preview}
-                          alt={`Preview ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '120px',
-                            objectFit: 'cover',
-                            borderRadius: 8,
-                            border: '1px solid #e0e0e0'
-                          }}
-                        />
-                        <IconButton
-                          size="small"
-                          sx={{
-                            position: 'absolute',
-                            top: 4,
-                            right: 4,
-                            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: 'error.main'
-                            }
-                          }}
-                          onClick={() => removeMedia(index)}
-                          disabled={loading}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                        {media.isExisting && (
-                          <Chip
-                            label="Existante"
-                            size="small"
-                            sx={{
-                              position: 'absolute',
-                              top: 4,
-                              left: 4,
-                              backgroundColor: 'primary.main',
-                              color: 'white',
-                              fontSize: '0.7rem'
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              )}
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={loading || localLoading || categoriesLoading}
+                startIcon={localLoading ? <CircularProgress size={20} /> : <Add />}
+              >
+                {localLoading ? 'Envoi en cours...' : initialData ? 'Mettre à jour' : 'Créer le produit'}
+              </Button>
             </Box>
           </Grid>
         </Grid>
-
-        <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-          <Button 
-            variant="outlined" 
-            onClick={onCancel} 
-            disabled={loading}
-          >
-            Annuler
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : <AddPhotoAlternate />}
-          >
-            {loading ? 'Enregistrement...' : initialData ? 'Modifier' : 'Publier'}
-          </Button>
-        </Box>
-      </Box>
+      </form>
     </Paper>
-  )
-}
+  );
+};
 
-export default ProductForm
+export default ProductForm;

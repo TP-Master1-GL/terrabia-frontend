@@ -1,216 +1,250 @@
-// components/Farmer/ProductList.js
-import React, { useState } from 'react'
+// components/farmer/ProductList.jsx
+import React, { useState } from 'react';
 import {
-  Box,
+  Grid,
   Card,
   CardContent,
   CardMedia,
+  CardActions,
   Typography,
   Button,
   Chip,
-  IconButton,
-  Grid,
+  Box,
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
-  Alert
-} from '@mui/material'
+  CircularProgress
+} from '@mui/material';
 import {
   Edit,
   Delete,
-  Visibility
-} from '@mui/icons-material'
+  Inventory,
+  Warning
+} from '@mui/icons-material';
 
-const ProductList = ({ products, onEdit, onDelete, loading, error }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+const ProductList = ({ products, onEdit, onDelete, loading = false }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const handleDeleteClick = (product) => {
-    setSelectedProduct(product)
-    setDeleteDialogOpen(true)
-  }
+    setProductToDelete(product);
+    setDeleteDialogOpen(true);
+  };
 
-  const handleDeleteConfirm = async () => {
-    if (selectedProduct) {
-      setDeleteLoading(true)
-      try {
-        await onDelete(selectedProduct.id)
-        setDeleteDialogOpen(false)
-        setSelectedProduct(null)
-      } catch (error) {
-        console.error('Error deleting product:', error)
-      } finally {
-        setDeleteLoading(false)
-      }
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
+    
+    try {
+      setDeleting(true);
+      await onDelete(productToDelete.id);
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
+    } catch (error) {
+      console.error('Error deleting product:', error);
+    } finally {
+      setDeleting(false);
     }
-  }
+  };
 
-  const getCategoryColor = (category) => {
-    const colors = {
-      'Légumes': 'success',
-      'Fruits': 'warning',
-      'Céréales': 'primary',
-      'Tubercules': 'secondary',
-      'Épices': 'error',
-      'Légumineuses': 'info',
-      'Produits animaux': 'default'
+  const handleCloseDialog = () => {
+    setDeleteDialogOpen(false);
+    setProductToDelete(null);
+  };
+
+  // Fonction pour obtenir l'URL de l'image du produit
+  const getProductImage = (product) => {
+    // Vérifier si le produit a des images
+    if (!product.images || product.images.length === 0) {
+      // Image par défaut si aucune image
+      return 'https://via.placeholder.com/400x300?text=Produit+sans+image';
     }
-    return colors[category?.name] || 'default'
-  }
-
-  const getStatusColor = (available) => {
-    return available ? 'success' : 'error'
-  }
-
-  const getStatusText = (available) => {
-    return available ? 'Disponible' : 'Indisponible'
-  }
+    
+    // Retourner la première image
+    return product.images[0].image;
+  };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" py={6}>
+      <Box display="flex" justifyContent="center" py={4}>
         <CircularProgress />
       </Box>
-    )
+    );
   }
 
-  if (error) {
+  if (!products || products.length === 0) {
     return (
-      <Alert severity="error" sx={{ mb: 3 }}>
-        {error}
+      <Alert severity="info" sx={{ mt: 2 }}>
+        Aucun produit disponible. Cliquez sur "Ajouter un produit" pour commencer.
       </Alert>
-    )
-  }
-
-  if (products.length === 0) {
-    return (
-      <Box textAlign="center" py={6}>
-        <Typography variant="h6" color="textSecondary">
-          Aucun produit trouvé
-        </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Commencez par ajouter votre premier produit
-        </Typography>
-      </Box>
-    )
+    );
   }
 
   return (
     <>
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
       <Grid container spacing={3}>
         {products.map((product) => (
-          <Grid item xs={12} sm={6} md={4} key={product.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
+            <Card sx={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: 6
+              }
+            }}>
+              {/* Image du produit - CORRECTION ICI */}
               <CardMedia
                 component="img"
                 height="200"
-                image={product.images?.[0]?.image || '/placeholder-product.jpg'}
+                image={getProductImage(product)}  // Utilisation de la fonction corrigée
                 alt={product.name}
-                sx={{ objectFit: 'cover' }}
+                sx={{ 
+                  objectFit: 'cover',
+                  bgcolor: 'grey.100'
+                }}
+                onError={(e) => {
+                  // En cas d'erreur de chargement d'image
+                  e.target.src = 'https://via.placeholder.com/400x300?text=Image+non+disponible';
+                }}
               />
               
               <CardContent sx={{ flexGrow: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                  <Typography variant="h6" component="h3" noWrap sx={{ flex: 1 }}>
-                    {product.name}
-                  </Typography>
-                  <Chip 
-                    label={product.category?.name} 
-                    size="small" 
-                    color={getCategoryColor(product.category)}
-                  />
-                </Box>
-
-                <Typography variant="body2" color="textSecondary" sx={{ mb: 2, minHeight: 40 }}>
-                  {product.description && product.description.length > 100 
-                    ? `${product.description.substring(0, 100)}...` 
-                    : product.description || 'Aucune description'
-                  }
+                {/* Nom du produit */}
+                <Typography 
+                  variant="h6" 
+                  component="h3" 
+                  sx={{ 
+                    fontWeight: 600,
+                    mb: 2,
+                    height: 60,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical'
+                  }}
+                >
+                  {product.name}
                 </Typography>
-
+                
+                {/* Statut et prix */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" color="primary">
-                    {parseFloat(product.price).toLocaleString()} FCFA
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {product.stock} {product.unit}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Chip 
-                    label={getStatusText(product.available)} 
-                    color={getStatusColor(product.available)}
+                  <Chip
+                    label={product.available ? 'Disponible' : 'Indisponible'}
                     size="small"
+                    color={product.available ? 'success' : 'error'}
+                    variant="outlined"
                   />
-                  
-                  <Box>
-                    <IconButton 
-                      size="small" 
-                      onClick={() => onEdit(product)}
-                      disabled={loading}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton 
-                      size="small" 
-                      onClick={() => handleDeleteClick(product)}
-                      disabled={loading}
-                    >
-                      <Delete />
-                    </IconButton>
-                  </Box>
+                  <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
+                    {parseFloat(product.price).toLocaleString('fr-FR')} FCFA
+                  </Typography>
                 </Box>
-
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="caption" color="textSecondary">
-                    Créé le: {new Date(product.created_at).toLocaleDateString('fr-FR')}
+                
+                {/* Description */}
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ 
+                    mb: 2,
+                    height: 60,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical'
+                  }}
+                >
+                  {product.description || 'Aucune description'}
+                </Typography>
+                
+                {/* Détails */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Inventory fontSize="small" sx={{ mr: 0.5 }} />
+                    Stock: {product.stock} {product.unit}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {product.images?.length || 0} image(s)
                   </Typography>
                 </Box>
               </CardContent>
+              
+              <CardActions sx={{ p: 2, pt: 0, gap: 1 }}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<Edit />}
+                  onClick={() => onEdit(product)}
+                  sx={{ flex: 1 }}
+                >
+                  Modifier
+                </Button>
+                
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Delete />}
+                  onClick={() => handleDeleteClick(product)}
+                  sx={{ flex: 1 }}
+                >
+                  Supprimer
+                </Button>
+              </CardActions>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      {/* Dialogue de confirmation de suppression */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>
-          Confirmer la suppression
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Warning color="warning" />
+            Confirmer la suppression
+          </Box>
         </DialogTitle>
+        
         <DialogContent>
-          <Typography>
-            Êtes-vous sûr de vouloir supprimer le produit "{selectedProduct?.name}" ? 
+          <Typography variant="body1" gutterBottom>
+            Êtes-vous sûr de vouloir supprimer le produit "{productToDelete?.name}" ?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
             Cette action est irréversible.
           </Typography>
         </DialogContent>
+        
         <DialogActions>
           <Button 
-            onClick={() => setDeleteDialogOpen(false)}
-            disabled={deleteLoading}
+            onClick={handleCloseDialog} 
+            disabled={deleting}
+            variant="outlined"
           >
             Annuler
           </Button>
-          <Button 
-            onClick={handleDeleteConfirm} 
+          <Button
+            onClick={handleConfirmDelete}
             color="error"
-            disabled={deleteLoading}
-            startIcon={deleteLoading ? <CircularProgress size={16} /> : null}
+            variant="contained"
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={20} /> : <Delete />}
           >
-            {deleteLoading ? 'Suppression...' : 'Supprimer'}
+            {deleting ? 'Suppression...' : 'Supprimer'}
           </Button>
         </DialogActions>
       </Dialog>
     </>
-  )
-}
+  );
+};
 
-export default ProductList
+export default ProductList;

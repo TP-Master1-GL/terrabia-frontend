@@ -1,33 +1,32 @@
-export const USER_ROLES = {
-  FARMER: 'farmer',
-  CUSTOMER: 'customer',
-  ADMIN: 'admin',
-  DELIVERY: 'delivery'
-}
-
+// utils/Constants.js
 export const PRODUCT_CATEGORIES = [
-  'Légumes',
   'Fruits',
+  'Légumes',
+  'Viandes',
+  'Produits laitiers',
   'Céréales',
-  'Tubercules',
-  'Épices',
-  'Légumineuses',
-  'Produits animaux',
+  'Épicerie',
+  'Boissons',
+  'Produits biologiques',
+  'Produits locaux',
   'Autres'
-]
-
-export const PAYMENT_METHODS = {
-  ORANGE_MONEY: 'orange_money',
-  MTN_MONEY: 'mtn_money',
-  PAYPAL: 'paypal'
-}
+];
 
 export const ORDER_STATUS = {
-  PENDING: 'pending',
-  CONFIRMED: 'confirmed',
-  PREPARING: 'preparing',
-  READY: 'ready',
-  IN_DELIVERY: 'in_delivery',
-  DELIVERED: 'delivered',
-  CANCELLED: 'cancelled'
-}
+  PENDING: 'En attente',
+  PROCESSING: 'En traitement',
+  SHIPPED: 'Expédiée',
+  DELIVERED: 'Livrée',
+  CANCELLED: 'Annulée'
+};
+
+export const UNITS = [
+  'kg',
+  'g',
+  'pièce',
+  'litre',
+  'ml',
+  'boîte',
+  'sac',
+  'botte'
+];

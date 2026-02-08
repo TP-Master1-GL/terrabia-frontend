@@ -21,6 +21,7 @@ import {
   useMediaQuery,
   Alert,
   Snackbar,
+  Tooltip,
 } from '@mui/material';
 import {
   Send,
@@ -34,66 +35,304 @@ import {
   Agriculture,
   LocalShipping,
   Info,
+  Done,
+  DoneAll,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/apiService';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Fonction de remplacement pour formater la date
+// Déterminer le fuseau horaire de l'utilisateur
+const getUserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (error) {
+    console.warn('Impossible de détecter le fuseau horaire, utilisation par défaut', error);
+    return 'Europe/Paris'; // Fuseau horaire par défaut
+  }
+};
+
+// Formater la date selon les préférences locales de l'utilisateur
+const formatDateLocal = (dateString, options = {}) => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      ...options,
+    });
+  } catch (error) {
+    console.error('Erreur formatage date:', error);
+    return '';
+  }
+};
+
+// Formater l'heure selon les préférences locales de l'utilisateur
+const formatTimeLocal = (dateString) => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    return date.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch (error) {
+    console.error('Erreur formatage heure:', error);
+    return '';
+  }
+};
+
+// Formater la date et l'heure complètes
+const formatDateTimeLocal = (dateString) => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    return date.toLocaleString('fr-FR', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch (error) {
+    console.error('Erreur formatage date/heure:', error);
+    return '';
+  }
+};
+
+// Fonction pour formater la date relative (il y a...)
 const formatTimeAgo = (dateString) => {
   if (!dateString) return 'à l\'instant';
   
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now - date) / 1000);
-  
-  if (diffInSeconds < 0) return 'à l\'instant';
-  if (diffInSeconds < 60) return 'à l\'instant';
-  
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) {
-    return `il y a ${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''}`;
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'à l\'instant';
+    
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 0) return 'à l\'instant';
+    if (diffInSeconds < 60) return 'à l\'instant';
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `il y a ${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''}`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      if (diffInHours === 1) return 'il y a 1 heure';
+      return `il y a ${diffInHours} heures`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays === 1) return 'hier';
+    if (diffInDays < 7) {
+      return `il y a ${diffInDays} jours`;
+    }
+    
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    if (diffInWeeks === 1) return 'il y a 1 semaine';
+    if (diffInWeeks < 4) {
+      return `il y a ${diffInWeeks} semaines`;
+    }
+    
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths === 1) return 'il y a 1 mois';
+    if (diffInMonths < 12) {
+      return `il y a ${diffInMonths} mois`;
+    }
+    
+    const diffInYears = Math.floor(diffInMonths / 12);
+    if (diffInYears === 1) return 'il y a 1 an';
+    return `il y a ${diffInYears} ans`;
+  } catch (error) {
+    console.error('Erreur formatage time ago:', error);
+    return '';
   }
-  
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) {
-    return `il y a ${diffInHours} heure${diffInHours > 1 ? 's' : ''}`;
-  }
-  
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 7) {
-    return `il y a ${diffInDays} jour${diffInDays > 1 ? 's' : ''}`;
-  }
-  
-  const diffInWeeks = Math.floor(diffInDays / 7);
-  if (diffInWeeks < 4) {
-    return `il y a ${diffInWeeks} semaine${diffInWeeks > 1 ? 's' : ''}`;
-  }
-  
-  const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths < 12) {
-    return `il y a ${diffInMonths} mois`;
-  }
-  
-  const diffInYears = Math.floor(diffInMonths / 12);
-  return `il y a ${diffInYears} an${diffInYears > 1 ? 's' : ''}`;
 };
 
-// Fonction pour formater l'heure
-const formatTime = (dateString) => {
+// Vérifier si une date est aujourd'hui
+const isToday = (dateString) => {
+  if (!dateString) return false;
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return false;
+    
+    const today = new Date();
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  } catch (error) {
+    console.error('Erreur vérification date:', error);
+    return false;
+  }
+};
+
+// Vérifier si une date est hier
+const isYesterday = (dateString) => {
+  if (!dateString) return false;
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return false;
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    return (
+      date.getDate() === yesterday.getDate() &&
+      date.getMonth() === yesterday.getMonth() &&
+      date.getFullYear() === yesterday.getFullYear()
+    );
+  } catch (error) {
+    console.error('Erreur vérification hier:', error);
+    return false;
+  }
+};
+
+// Formater la date pour l'affichage des groupes
+const formatGroupDate = (dateString) => {
   if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleTimeString('fr-FR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  
+  try {
+    if (isToday(dateString)) {
+      return 'Aujourd\'hui';
+    }
+    
+    if (isYesterday(dateString)) {
+      return 'Hier';
+    }
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    // Pour les dates de cette année, afficher seulement le jour et mois
+    const currentYear = new Date().getFullYear();
+    if (date.getFullYear() === currentYear) {
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+    }
+    
+    // Pour les dates des autres années
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  } catch (error) {
+    console.error('Erreur formatage groupe date:', error);
+    return '';
+  }
+};
+
+// Composant pour les indicateurs de statut des messages (coches)
+const MessageStatusIndicator = ({ status, readAt, isOwnMessage }) => {
+  if (!isOwnMessage) return null;
+
+  let icon = null;
+  let color = 'rgba(255, 255, 255, 0.6)';
+  let tooltipText = 'Envoyé';
+
+  switch (status) {
+    case 'sent':
+      icon = <Done fontSize="inherit" />;
+      tooltipText = 'Envoyé';
+      break;
+    case 'delivered':
+      icon = <DoneAll fontSize="inherit" />;
+      tooltipText = 'Reçu';
+      break;
+    case 'read':
+      icon = <DoneAll fontSize="inherit" />;
+      color = '#4fc3f7'; // Bleu WhatsApp
+      tooltipText = readAt ? `Lu à ${formatTimeLocal(readAt)}` : 'Lu';
+      break;
+    case 'failed':
+      icon = <Done fontSize="inherit" sx={{ color: 'error.main' }} />;
+      tooltipText = 'Échec d\'envoi';
+      return (
+        <Tooltip title={tooltipText}>
+          <Box component="span" sx={{ ml: 0.5 }}>
+            {icon}
+          </Box>
+        </Tooltip>
+      );
+    default:
+      icon = <Done fontSize="inherit" />;
+      tooltipText = 'Envoyé';
+  }
+
+  return (
+    <Tooltip title={tooltipText}>
+      <Box component="span" sx={{ ml: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+        {React.cloneElement(icon, { sx: { fontSize: '0.875rem', color } })}
+      </Box>
+    </Tooltip>
+  );
+};
+
+// Composant pour afficher l'heure avec tooltip de date complète
+const TimeWithTooltip = ({ dateString, showRelative = true }) => {
+  const time = formatTimeLocal(dateString);
+  const fullDateTime = formatDateTimeLocal(dateString);
+  const timeAgo = showRelative ? formatTimeAgo(dateString) : null;
+
+  return (
+    <Tooltip title={fullDateTime} arrow placement="top">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            opacity: 0.8,
+            fontSize: '0.75rem',
+          }}
+        >
+          {time}
+        </Typography>
+        {showRelative && timeAgo && (
+          <Typography
+            variant="caption"
+            sx={{
+              opacity: 0.6,
+              fontSize: '0.65rem',
+              fontStyle: 'italic',
+            }}
+          >
+            ({timeAgo})
+          </Typography>
+        )}
+      </Box>
+    </Tooltip>
+  );
 };
 
 const Chat = () => {
   const { user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const userTimezone = useRef(getUserTimezone());
 
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -117,6 +356,7 @@ const Chat = () => {
 
   useEffect(() => {
     console.log('👤 Utilisateur connecté:', user);
+    console.log('🌍 Fuseau horaire détecté:', userTimezone.current);
     if (user) {
       loadConversations();
     }
@@ -142,10 +382,21 @@ const Chat = () => {
       const data = await apiService.getConversations();
       console.log('✅ Conversations chargées:', data);
       
-      setConversations(data || []);
+      // Traiter les dates des conversations
+      const processedConversations = (data || []).map(conv => ({
+        ...conv,
+        // Formater la dernière date de message
+        last_message: conv.last_message ? {
+          ...conv.last_message,
+          formatted_time: formatTimeLocal(conv.last_message.created_at),
+          time_ago: formatTimeAgo(conv.last_message.created_at),
+        } : null,
+      }));
+      
+      setConversations(processedConversations);
       if (data && data.length > 0 && !selectedConversation) {
         console.log('🎯 Première conversation sélectionnée:', data[0]);
-        setSelectedConversation(data[0]);
+        setSelectedConversation(processedConversations[0]);
       }
     } catch (err) {
       console.error('❌ Erreur chargement conversations:', err);
@@ -163,7 +414,18 @@ const Chat = () => {
       const data = await apiService.getMessages(conversationId);
       console.log(`✅ Messages chargés pour ${conversationId}:`, data);
       
-      setMessages(data || []);
+      // Traiter les dates des messages
+      const processedMessages = (data || []).map(msg => ({
+        ...msg,
+        status: msg.status || 'sent',
+        read_at: msg.read_at || null,
+        formatted_time: formatTimeLocal(msg.created_at),
+        formatted_date: formatDateLocal(msg.created_at, { weekday: 'long' }),
+        time_ago: formatTimeAgo(msg.created_at),
+        full_datetime: formatDateTimeLocal(msg.created_at),
+      }));
+      
+      setMessages(processedMessages);
     } catch (err) {
       console.error(`❌ Erreur chargement messages ${conversationId}:`, err);
       showError('Impossible de charger les messages');
@@ -202,12 +464,18 @@ const Chat = () => {
       console.log(`📤 Envoi message à conversation ${selectedConversation.id}:`, newMessage);
       
       // Créer un message temporaire pour l'UI
+      const now = new Date();
       const tempMessage = {
         id: Date.now(), // ID temporaire
         content: newMessage.trim(),
-        created_at: new Date().toISOString(),
+        created_at: now.toISOString(),
         sender: user,
         isTemp: true,
+        status: 'sent',
+        formatted_time: formatTimeLocal(now.toISOString()),
+        formatted_date: formatDateLocal(now.toISOString(), { weekday: 'long' }),
+        time_ago: 'à l\'instant',
+        full_datetime: formatDateTimeLocal(now.toISOString()),
       };
       
       // Ajouter le message temporaire immédiatement
@@ -224,9 +492,19 @@ const Chat = () => {
       console.log('✅ Message envoyé avec succès:', messageData);
 
       // Remplacer le message temporaire par la réponse du serveur
+      const processedMessage = {
+        ...messageData,
+        status: messageData.status || 'sent',
+        read_at: messageData.read_at || null,
+        formatted_time: formatTimeLocal(messageData.created_at),
+        formatted_date: formatDateLocal(messageData.created_at, { weekday: 'long' }),
+        time_ago: formatTimeAgo(messageData.created_at),
+        full_datetime: formatDateTimeLocal(messageData.created_at),
+      };
+      
       setMessages((prev) =>
         prev.map((msg) => 
-          msg.isTemp && msg.content === originalMessage ? messageData : msg
+          msg.isTemp && msg.content === originalMessage ? processedMessage : msg
         )
       );
       
@@ -239,8 +517,8 @@ const Chat = () => {
             ? { 
                 ...conv, 
                 last_message: {
-                  ...messageData,
-                  created_at: messageData.created_at || new Date().toISOString()
+                  ...processedMessage,
+                  created_at: processedMessage.created_at || now.toISOString(),
                 }
               }
             : conv
@@ -252,8 +530,14 @@ const Chat = () => {
     } catch (err) {
       console.error('❌ Erreur envoi message:', err);
       showError('Impossible d\'envoyer le message');
-      // Supprimer le message temporaire en cas d'erreur
-      setMessages((prev) => prev.filter((msg) => !msg.isTemp));
+      // Marquer le message temporaire comme échoué
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.isTemp && msg.content === originalMessage
+            ? { ...msg, status: 'failed' }
+            : msg
+        )
+      );
     } finally {
       setLoading((prev) => ({ ...prev, sending: false }));
     }
@@ -325,11 +609,38 @@ const Chat = () => {
 
   const getLastMessageTime = (conversation) => {
     if (!conversation.last_message?.created_at) return '';
-    return formatTime(conversation.last_message.created_at);
+    return conversation.last_message.formatted_time || formatTimeLocal(conversation.last_message.created_at);
   };
 
   const handleRetryLoadConversations = () => {
     loadConversations();
+  };
+
+  // Fonction pour regrouper les messages par date
+  const groupMessagesByDate = (messages) => {
+    const groups = [];
+    let currentDate = null;
+    
+    messages.forEach((message) => {
+      const messageDate = formatGroupDate(message.created_at);
+      
+      if (messageDate !== currentDate) {
+        groups.push({
+          type: 'date',
+          date: messageDate,
+          timestamp: message.created_at,
+          full_date: formatDateLocal(message.created_at),
+        });
+        currentDate = messageDate;
+      }
+      
+      groups.push({
+        type: 'message',
+        data: message,
+      });
+    });
+    
+    return groups;
   };
 
   return (
@@ -360,6 +671,9 @@ const Chat = () => {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Info fontSize="small" />
                 Messages
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  ({userTimezone.current})
+                </Typography>
                 <IconButton 
                   size="small" 
                   onClick={handleRetryLoadConversations}
@@ -430,9 +744,6 @@ const Chat = () => {
                       const participant = getParticipantInfo(conversation);
                       const isSelected = selectedConversation?.id === conversation.id;
                       const unreadCount = conversation.unread_count || 0;
-
-                      console.log('Conversation:', conversation);
-                      console.log('Participant:', participant);
 
                       return (
                         <motion.div
@@ -513,9 +824,11 @@ const Chat = () => {
                                     )}
                                   </Box>
                                   {conversation.last_message?.created_at && (
-                                    <Typography variant="caption" color="text.secondary">
-                                      {getLastMessageTime(conversation)}
-                                    </Typography>
+                                    <Tooltip title={formatDateTimeLocal(conversation.last_message.created_at)}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {getLastMessageTime(conversation)}
+                                      </Typography>
+                                    </Tooltip>
                                   )}
                                 </Box>
                               }
@@ -540,6 +853,15 @@ const Chat = () => {
                                     {conversation.last_message?.content ||
                                       'Aucun message'}
                                   </Typography>
+                                  
+                                  {/* Indicateur de statut pour le dernier message */}
+                                  {conversation.last_message?.sender?.id === user?.id && (
+                                    <MessageStatusIndicator
+                                      status={conversation.last_message?.status}
+                                      readAt={conversation.last_message?.read_at}
+                                      isOwnMessage={true}
+                                    />
+                                  )}
                                 </Box>
                               }
                             />
@@ -671,7 +993,32 @@ const Chat = () => {
                     </Box>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {messages.map((message, index) => {
+                      {groupMessagesByDate(messages).map((item, index) => {
+                        if (item.type === 'date') {
+                          return (
+                            <Box
+                              key={`date-${index}`}
+                              sx={{
+                                textAlign: 'center',
+                                my: 2,
+                              }}
+                            >
+                              <Tooltip title={item.full_date}>
+                                <Chip
+                                  label={item.date}
+                                  size="small"
+                                  sx={{
+                                    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                    fontWeight: 500,
+                                    fontSize: '0.75rem',
+                                  }}
+                                />
+                              </Tooltip>
+                            </Box>
+                          );
+                        }
+
+                        const message = item.data;
                         const isOwnMessage = message.sender?.id === user?.id;
                         const isTemp = message.isTemp;
                         const senderName = message.sender?.first_name || message.sender?.username || 'Utilisateur';
@@ -729,27 +1076,35 @@ const Chat = () => {
                                   mt: 1,
                                 }}
                               >
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    opacity: 0.8,
-                                    fontSize: '0.75rem',
-                                    color: isOwnMessage ? 'rgba(255,255,255,0.8)' : 'text.secondary',
-                                  }}
-                                >
-                                  {formatTimeAgo(message.created_at)}
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    opacity: 0.6,
-                                    fontSize: '0.75rem',
-                                    ml: 1,
-                                    color: isOwnMessage ? 'rgba(255,255,255,0.6)' : 'text.secondary',
-                                  }}
-                                >
-                                  {formatTime(message.created_at)}
-                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <TimeWithTooltip 
+                                    dateString={message.created_at} 
+                                    showRelative={false}
+                                  />
+                                  
+                                  {/* Indicateur de statut */}
+                                  <MessageStatusIndicator
+                                    status={message.status}
+                                    readAt={message.read_at}
+                                    isOwnMessage={isOwnMessage}
+                                  />
+                                </Box>
+                                
+                                {/* Info date relative au survol */}
+                                <Tooltip title={message.full_datetime}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      opacity: 0.6,
+                                      fontSize: '0.7rem',
+                                      ml: 1,
+                                      color: isOwnMessage ? 'rgba(255,255,255,0.6)' : 'text.secondary',
+                                      fontStyle: 'italic',
+                                    }}
+                                  >
+                                    {message.time_ago}
+                                  </Typography>
+                                </Tooltip>
                               </Box>
                             </Paper>
                           </motion.div>

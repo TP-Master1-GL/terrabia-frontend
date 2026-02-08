@@ -1,10 +1,9 @@
-// src/pages/Products.jsx
+// pages/Products.jsx - CORRIGÉ
 import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
   Box,
-  Grid,
   TextField,
   FormControl,
   InputLabel,
@@ -35,6 +34,7 @@ import {
   CardContent,
   CardMedia,
   CardActions,
+  Pagination
 } from '@mui/material';
 import {
   Search,
@@ -50,9 +50,10 @@ import {
   LocalShipping,
   Star,
   Visibility,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import apiService from '../../services/apiService';
 import { PRODUCT_CATEGORIES } from '../../utils/Constants';
 
@@ -74,11 +75,37 @@ const Products = () => {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [chatDialogOpen, setChatDialogOpen] = useState(false);
   const [selectedFarmer, setSelectedFarmer] = useState(null);
+  const [favoritesLoading, setFavoritesLoading] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
+  // Fonction pour obtenir l'URL de l'image
+  const getProductImage = (product) => {
+    if (!product.images || product.images.length === 0) {
+      return '/placeholder-product.jpg';
+    }
+    // Retourne la première image
+    return product.images[0].image;
+  };
+
+  // Fonction pour obtenir le nom de la catégorie
+  const getCategoryName = (product) => {
+    return product.category?.name || 'Sans catégorie';
+  };
+
+  // Charger les catégories au montage
   useEffect(() => {
-    fetchProducts();
     fetchCategories();
-  }, [selectedCategory, sortBy, searchTerm]);
+  }, []);
+
+  // Charger les produits quand les filtres changent
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      fetchProducts();
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [selectedCategory, sortBy, searchTerm, priceRange, currentPage]);
 
   const fetchProducts = async () => {
     try {
@@ -91,13 +118,32 @@ const Products = () => {
         ordering: sortBy,
         price_min: priceRange[0],
         price_max: priceRange[1],
+        page: currentPage
       };
 
       const data = await apiService.getProducts(params);
-      setProducts(Array.isArray(data) ? data : data.results || []);
+      
+      // Debug: afficher les données reçues
+      console.log('Données produits reçues:', data);
+      if (data && data.length > 0) {
+        console.log('Premier produit:', data[0]);
+        console.log('Images du premier produit:', data[0].images);
+        console.log('Catégorie du premier produit:', data[0].category);
+      }
+      
+      if (data && Array.isArray(data.results)) {
+        setProducts(data.results);
+        setTotalPages(data.total_pages || 1);
+      } else if (Array.isArray(data)) {
+        setProducts(data);
+        setTotalPages(1);
+      } else {
+        setProducts([]);
+        setTotalPages(1);
+      }
     } catch (err) {
       console.error('Error fetching products:', err);
-      setError('Impossible de charger les produits');
+      setError('Impossible de charger les produits. Vérifiez votre connexion.');
       setProducts([]);
     } finally {
       setLoading(false);
@@ -106,30 +152,41 @@ const Products = () => {
 
   const fetchCategories = async () => {
     try {
+      console.log('Loading categories...');
       const data = await apiService.getCategories();
-      setCategories(data || []);
+      console.log('Categories loaded:', data);
+      setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching categories:', err);
+      // Fallback aux catégories statiques
       setCategories(
-        PRODUCT_CATEGORIES.map((cat, index) => ({ id: index + 1, name: cat }))
+        PRODUCT_CATEGORIES.map((cat, index) => ({ 
+          id: index + 1, 
+          name: cat,
+          slug: cat.toLowerCase().replace(/\s+/g, '-')
+        }))
       );
     }
   };
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+    setCurrentPage(1); // Réinitialiser à la première page
   };
 
   const handleCategoryChange = (event) => {
     setSelectedCategory(event.target.value);
+    setCurrentPage(1);
   };
 
   const handleSortChange = (event) => {
     setSortBy(event.target.value);
+    setCurrentPage(1);
   };
 
   const handlePriceChange = (event, newValue) => {
     setPriceRange(newValue);
+    setCurrentPage(1);
   };
 
   const handleClearFilters = () => {
@@ -137,6 +194,7 @@ const Products = () => {
     setSelectedCategory('');
     setSortBy('name');
     setPriceRange([0, 10000]);
+    setCurrentPage(1);
   };
 
   const handleAddToCart = async (productId, quantity = 1) => {
@@ -145,16 +203,26 @@ const Products = () => {
       alert('Produit ajouté au panier !');
     } catch (error) {
       console.error('Error adding to cart:', error);
-      alert('Erreur lors de l\'ajout au panier');
+      alert('Erreur lors de l\'ajout au panier. Veuillez vous connecter.');
     }
   };
 
   const handleToggleFavorite = async (productId) => {
     try {
+      setFavoritesLoading(prev => ({ ...prev, [productId]: true }));
       await apiService.toggleFavorite(productId);
-      fetchProducts();
+      
+      // Mettre à jour l'état local
+      setProducts(prev => prev.map(product => 
+        product.id === productId 
+          ? { ...product, is_favorite: !product.is_favorite }
+          : product
+      ));
     } catch (error) {
       console.error('Error toggling favorite:', error);
+      alert('Veuillez vous connecter pour ajouter aux favoris.');
+    } finally {
+      setFavoritesLoading(prev => ({ ...prev, [productId]: false }));
     }
   };
 
@@ -165,7 +233,6 @@ const Products = () => {
 
   const handleConfirmChat = () => {
     if (selectedFarmer) {
-      // Créer une conversation avec l'agriculteur
       navigate(`/chat?farmer=${selectedFarmer.id}`);
       setChatDialogOpen(false);
     }
@@ -173,6 +240,10 @@ const Products = () => {
 
   const handleViewProductDetails = (productId) => {
     navigate(`/products/${productId}`);
+  };
+
+  const handlePageChange = (event, page) => {
+    setCurrentPage(page);
   };
 
   // Composant de filtres (tiroir mobile)
@@ -215,11 +286,13 @@ const Products = () => {
       <FormControl fullWidth sx={{ mb: 3 }}>
         <InputLabel>Trier par</InputLabel>
         <Select value={sortBy} onChange={handleSortChange} label="Trier par">
-          <MenuItem value="name">Nom</MenuItem>
+          <MenuItem value="name">Nom (A-Z)</MenuItem>
+          <MenuItem value="-name">Nom (Z-A)</MenuItem>
           <MenuItem value="price">Prix: Croissant</MenuItem>
           <MenuItem value="-price">Prix: Décroissant</MenuItem>
           <MenuItem value="-created_at">Nouveautés</MenuItem>
           <MenuItem value="-rating">Meilleures notes</MenuItem>
+          <MenuItem value="-stock">Stock disponible</MenuItem>
         </Select>
       </FormControl>
 
@@ -252,13 +325,14 @@ const Products = () => {
         color="error"
         startIcon={<Clear />}
         onClick={handleClearFilters}
+        sx={{ mt: 2 }}
       >
         Effacer les filtres
       </Button>
     </Drawer>
   );
 
-  // Composant de carte de produit améliorée
+  // Composant de carte de produit
   const EnhancedProductCard = ({ product }) => (
     <Card
       sx={{
@@ -272,17 +346,43 @@ const Products = () => {
         },
       }}
     >
-      {/* Image du produit */}
+      {/* Badge "En stock" */}
+      {product.stock <= 0 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 10,
+            left: 10,
+            backgroundColor: 'error.main',
+            color: 'white',
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+            zIndex: 1,
+          }}
+        >
+          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+            RUPTURE
+          </Typography>
+        </Box>
+      )}
+
+      {/* Image du produit - CORRIGÉ */}
       <CardMedia
         component="img"
         height="200"
-        image={product.image_url || '/placeholder-product.jpg'}
+        image={getProductImage(product)}
         alt={product.name}
         sx={{
           objectFit: 'cover',
           cursor: 'pointer',
+          opacity: product.stock <= 0 ? 0.5 : 1,
         }}
         onClick={() => handleViewProductDetails(product.id)}
+        onError={(e) => {
+          // Fallback en cas d'erreur de chargement
+          e.target.src = '/placeholder-product.jpg';
+        }}
       />
 
       <CardContent sx={{ flexGrow: 1 }}>
@@ -304,8 +404,15 @@ const Products = () => {
             size="small"
             onClick={() => handleToggleFavorite(product.id)}
             color={product.is_favorite ? 'error' : 'default'}
+            disabled={favoritesLoading[product.id]}
           >
-            {product.is_favorite ? <Favorite /> : <FavoriteBorder />}
+            {favoritesLoading[product.id] ? (
+              <CircularProgress size={20} />
+            ) : product.is_favorite ? (
+              <Favorite />
+            ) : (
+              <FavoriteBorder />
+            )}
           </IconButton>
         </Box>
 
@@ -334,19 +441,19 @@ const Products = () => {
         {/* Rating */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Rating
-            value={product.rating || 4.5}
+            value={product.rating || 0}
             precision={0.5}
             size="small"
             readOnly
           />
           <Typography variant="body2" color="text.secondary">
-            ({product.review_count || 12})
+            ({product.review_count || 0})
           </Typography>
         </Box>
 
         {/* Prix */}
         <Typography variant="h5" color="primary" sx={{ fontWeight: 700, mb: 2 }}>
-          {product.price} FCFA
+          {parseFloat(product.price).toLocaleString('fr-FR')} FCFA
           <Typography component="span" variant="body2" color="text.secondary">
             / {product.unit}
           </Typography>
@@ -354,63 +461,85 @@ const Products = () => {
 
         {/* Informations supplémentaires */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+          {product.stock > 0 && (
+            <Chip
+              label={`Stock: ${product.stock}`}
+              size="small"
+              color="success"
+              variant="outlined"
+              icon={<InventoryIcon />}
+            />
+          )}
+          {/* Catégorie - CORRIGÉ */}
           <Chip
-            label="Livraison gratuite"
+            label={getCategoryName(product)}
             size="small"
-            color="success"
-            variant="outlined"
-            icon={<LocalShipping />}
-          />
-          <Chip
-            label="En stock"
-            size="small"
-            color="success"
+            color="info"
             variant="outlined"
           />
         </Box>
       </CardContent>
 
       <CardActions sx={{ p: 2, pt: 0 }}>
-        <Grid container spacing={1}>
-          <Grid item xs={6}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
-              fullWidth
               variant="contained"
               startIcon={<ShoppingCart />}
               onClick={() => handleAddToCart(product.id)}
               size="small"
+              disabled={product.stock <= 0}
+              sx={{ flex: 1 }}
             >
-              Ajouter
+              {product.stock > 0 ? 'Ajouter' : 'Rupture'}
             </Button>
-          </Grid>
-          <Grid item xs={6}>
             <Tooltip title="Contacter l'agriculteur">
               <Button
-                fullWidth
                 variant="outlined"
                 startIcon={<Message />}
                 onClick={() => handleStartChat(product.farmer)}
                 size="small"
+                sx={{ flex: 1 }}
               >
                 Contacter
               </Button>
             </Tooltip>
-          </Grid>
-          <Grid item xs={12}>
-            <Button
-              fullWidth
-              variant="text"
-              startIcon={<Visibility />}
-              onClick={() => handleViewProductDetails(product.id)}
-              size="small"
-              sx={{ mt: 1 }}
-            >
-              Voir détails
-            </Button>
-          </Grid>
-        </Grid>
+          </Box>
+          <Button
+            fullWidth
+            variant="text"
+            startIcon={<Visibility />}
+            onClick={() => handleViewProductDetails(product.id)}
+            size="small"
+          >
+            Voir détails
+          </Button>
+        </Box>
       </CardActions>
     </Card>
+  );
+
+  // Composant Grid personnalisé
+  const Grid = ({ children, spacing = 3, ...props }) => (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: spacing,
+        gridTemplateColumns: {
+          xs: 'repeat(1, 1fr)',
+          sm: 'repeat(2, 1fr)',
+          md: 'repeat(3, 1fr)',
+          lg: 'repeat(4, 1fr)',
+        },
+        ...props.sx,
+      }}
+    >
+      {children}
+    </Box>
+  );
+
+  const GridItem = ({ children, ...props }) => (
+    <Box {...props}>{children}</Box>
   );
 
   return (
@@ -431,64 +560,60 @@ const Products = () => {
 
       {/* Barre de recherche et actions */}
       <Box sx={{ mb: 4 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              placeholder="Rechercher des produits..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setSearchTerm('')} size="small">
-                      <Clear />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  backgroundColor: 'white',
-                },
-              }}
-            />
-          </Grid>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+          <TextField
+            fullWidth
+            placeholder="Rechercher des produits..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton onClick={() => setSearchTerm('')} size="small">
+                    <Clear />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 3,
+                backgroundColor: 'white',
+              },
+            }}
+          />
 
-          <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-              {!isMobile && (
-                <ToggleButtonGroup
-                  value={viewMode}
-                  exclusive
-                  onChange={(e, newMode) => newMode && setViewMode(newMode)}
-                  size="small"
-                >
-                  <ToggleButton value="grid">
-                    <GridView />
-                  </ToggleButton>
-                  <ToggleButton value="list">
-                    <ViewList />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              )}
-
-              <Button
-                variant="outlined"
-                startIcon={<FilterList />}
-                onClick={() => setFilterDrawerOpen(true)}
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            {!isMobile && (
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={(e, newMode) => newMode && setViewMode(newMode)}
+                size="small"
               >
-                Filtres
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
+                <ToggleButton value="grid">
+                  <GridView />
+                </ToggleButton>
+                <ToggleButton value="list">
+                  <ViewList />
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
+
+            <Button
+              variant="outlined"
+              startIcon={<FilterList />}
+              onClick={() => setFilterDrawerOpen(true)}
+            >
+              Filtres
+            </Button>
+          </Box>
+        </Box>
       </Box>
 
       {/* Filtres actifs */}
@@ -504,7 +629,7 @@ const Products = () => {
           )}
           {selectedCategory && (
             <Chip
-              label={`Catégorie: ${categories.find((c) => c.id === selectedCategory)?.name}`}
+              label={`Catégorie: ${categories.find((c) => c.id === selectedCategory)?.name || selectedCategory}`}
               onDelete={() => setSelectedCategory('')}
               color="secondary"
               variant="outlined"
@@ -525,6 +650,9 @@ const Products = () => {
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress size={60} />
+          <Typography variant="body1" sx={{ ml: 2, alignSelf: 'center' }}>
+            Chargement des produits...
+          </Typography>
         </Box>
       ) : error ? (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -534,22 +662,38 @@ const Products = () => {
         <>
           {/* Vue Grid */}
           {viewMode === 'grid' && (
-            <Grid container spacing={3}>
-              <AnimatePresence>
-                {products.map((product, index) => (
-                  <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                    >
-                      <EnhancedProductCard product={product} />
-                    </motion.div>
-                  </Grid>
-                ))}
-              </AnimatePresence>
-            </Grid>
+            <>
+              <Grid spacing={3}>
+                <AnimatePresence>
+                  {products.map((product, index) => (
+                    <GridItem key={product.id}>
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                      >
+                        <EnhancedProductCard product={product} />
+                      </motion.div>
+                    </GridItem>
+                  ))}
+                </AnimatePresence>
+              </Grid>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                  <Pagination
+                    count={totalPages}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                    color="primary"
+                    showFirstButton
+                    showLastButton
+                  />
+                </Box>
+              )}
+            </>
           )}
 
           {/* Message vide */}
@@ -560,8 +704,15 @@ const Products = () => {
                   Aucun produit trouvé
                 </Typography>
                 <Typography variant="body1" color="text.secondary">
-                  Essayez d'ajuster vos critères de recherche
+                  Essayez d'ajuster vos critères de recherche ou de filtre
                 </Typography>
+                <Button
+                  variant="outlined"
+                  sx={{ mt: 2 }}
+                  onClick={handleClearFilters}
+                >
+                  Effacer tous les filtres
+                </Button>
               </Box>
             </Fade>
           )}
@@ -602,12 +753,16 @@ const Products = () => {
             Vous pourrez discuter du produit, poser des questions sur la production, 
             ou négocier les conditions de livraison.
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            📞 {selectedFarmer?.phone_number || 'Téléphone non disponible'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            📧 {selectedFarmer?.email}
-          </Typography>
+          {selectedFarmer?.phone_number && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              📞 {selectedFarmer.phone_number}
+            </Typography>
+          )}
+          {selectedFarmer?.email && (
+            <Typography variant="body2" color="text.secondary">
+              📧 {selectedFarmer.email}
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setChatDialogOpen(false)}>

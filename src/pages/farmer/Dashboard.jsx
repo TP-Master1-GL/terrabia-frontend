@@ -4,7 +4,6 @@ import {
   Container,
   Typography,
   Box,
-  Grid,
   Paper,
   Tabs,
   Tab,
@@ -13,21 +12,32 @@ import {
   CardContent,
   Alert,
   CircularProgress,
-  Snackbar
-} from '@mui/material'
+  Snackbar,
+  CardMedia,
+  IconButton,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  TextField,
+  Grid // IMPORT STANDARD - PAS Grid2
+} from '@mui/material' // Import depuis @mui/material
 import {
   Add,
   Inventory,
   Receipt,
   Chat,
-  TrendingUp
+  TrendingUp,
+  Edit,
+  Delete,
+  Clear,
+  CloudUpload
 } from '@mui/icons-material'
 import { useAuth } from '../../contexts/AuthContext'
 import StatsCard from '../../components/admin/StatsCard'
-import ProductList from '../../components/farmer/ProductList'
-import ProductForm from '../../components/farmer/ProductForm'
 import OrderList from '../../components/farmer/OrderList'
-import ApiService from '../../services/apiService'
+import apiService from '../../services/apiService'
+import { PRODUCT_CATEGORIES } from '../../utils/Constants'
 
 const FarmerDashboard = () => {
   const { user } = useAuth()
@@ -35,17 +45,41 @@ const FarmerDashboard = () => {
   const [showProductForm, setShowProductForm] = useState(false)
   const [products, setProducts] = useState([])
   const [orders, setOrders] = useState([])
-  const [stats, setStats] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editingProduct, setEditingProduct] = useState(null)
   const [categories, setCategories] = useState([])
 
-  // Charger les données initiales
+  // Formulaire produit
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    unit: '',
+    stock: '',
+    category_id: '',
+    available: true,
+    image: null
+  })
+  const [imagePreview, setImagePreview] = useState(null)
+
+  // Fonction pour obtenir l'URL de l'image d'un produit
+  const getProductImage = (product) => {
+    if (!product.images || product.images.length === 0) {
+      return '/placeholder-product.jpg';
+    }
+    return product.images[0].image;
+  };
+
+  const getCategoryName = (product) => {
+    return product.category?.name || 'Sans catégorie';
+  };
+
   useEffect(() => {
     if (user) {
       loadData()
+      loadCategories()
     }
   }, [user, activeTab])
 
@@ -54,26 +88,14 @@ const FarmerDashboard = () => {
       setLoading(true)
       setError('')
 
-      // Charger les produits du farmer
-      if (activeTab === 0 || activeTab === 3) {
-        const productsData = await ApiService.getMyProducts()
+      if (activeTab === 0 || activeTab === 2) {
+        const productsData = await apiService.getMyProducts()
         setProducts(Array.isArray(productsData) ? productsData : [])
       }
 
-      // Charger les commandes du farmer
-      if (activeTab === 1 || activeTab === 3) {
-        const ordersData = await ApiService.getFarmerOrders()
+      if (activeTab === 1 || activeTab === 2) {
+        const ordersData = await apiService.getFarmerOrders()
         setOrders(Array.isArray(ordersData) ? ordersData : [])
-      }
-
-      // Charger les catégories pour les statistiques
-      if (activeTab === 3) {
-        try {
-          const categoriesData = await ApiService.getCategories()
-          setCategories(Array.isArray(categoriesData) ? categoriesData : [])
-        } catch (err) {
-          console.error('Erreur chargement catégories:', err)
-        }
       }
     } catch (err) {
       console.error('Load data error:', err)
@@ -83,93 +105,195 @@ const FarmerDashboard = () => {
     }
   }
 
+  const loadCategories = async () => {
+    try {
+      if (typeof apiService.getCategories === 'function') {
+        const categoriesData = await apiService.getCategories()
+        setCategories(Array.isArray(categoriesData) ? categoriesData : [])
+      } else {
+        try {
+          const response = await fetch('http://localhost:8000/api/products/categories/')
+          if (response.ok) {
+            const data = await response.json()
+            setCategories(Array.isArray(data) ? data : [])
+          } else {
+            throw new Error('Échec chargement catégories')
+          }
+        } catch (fetchError) {
+          setCategories(PRODUCT_CATEGORIES.map((cat, index) => ({ 
+            id: index + 1, 
+            name: cat,
+            slug: cat.toLowerCase().replace(/\s+/g, '-')
+          })))
+        }
+      }
+    } catch (err) {
+      setCategories(PRODUCT_CATEGORIES.map((cat, index) => ({ 
+        id: index + 1, 
+        name: cat 
+      })))
+    }
+  }
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue)
     setShowProductForm(false)
     setEditingProduct(null)
+    resetForm()
   }
 
-  const handleAddProduct = async (formData) => {
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      description: '',
+      price: '',
+      unit: '',
+      stock: '',
+      category_id: '',
+      available: true,
+      image: null
+    })
+    setImagePreview(null)
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData({
+      ...formData,
+      [name]: value
+    })
+  }
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setFormData({
+      ...formData,
+      image: file
+    })
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleAddProduct = async () => {
     try {
       setLoading(true)
       setError('')
-      console.log('Creating product with FormData')
       
-      // Utiliser ApiService pour créer le produit
-      const newProduct = await ApiService.createProduct(formData)
+      const formDataToSend = new FormData()
+      formDataToSend.append('name', formData.name)
+      formDataToSend.append('description', formData.description)
+      formDataToSend.append('price', formData.price)
+      formDataToSend.append('unit', formData.unit)
+      formDataToSend.append('stock', formData.stock)
+      formDataToSend.append('category_id', formData.category_id)
+      formDataToSend.append('available', formData.available)
+      
+      if (formData.image) {
+        formDataToSend.append('image', formData.image)
+      }
+
+      const newProduct = await apiService.createProduct(formDataToSend)
       
       setProducts(prev => [newProduct, ...prev])
       setShowProductForm(false)
       setSuccess('Produit créé avec succès!')
-      await loadData() // Recharger les données
+      resetForm()
+      await loadData()
     } catch (err) {
       console.error('Error creating product:', err)
       setError(err.message || 'Erreur lors de la création du produit')
-      throw err
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEditProduct = async (product) => {
-    setEditingProduct(product)
-    setShowProductForm(true)
-  }
-
-  const handleUpdateProduct = async (formData) => {
+  const handleUpdateProduct = async () => {
     try {
       setLoading(true)
       setError('')
       
-      // Utiliser ApiService pour mettre à jour le produit
-      const updatedProduct = await ApiService.updateProduct(editingProduct.id, formData)
+      const formDataToSend = new FormData()
+      formDataToSend.append('name', formData.name)
+      formDataToSend.append('description', formData.description)
+      formDataToSend.append('price', formData.price)
+      formDataToSend.append('unit', formData.unit)
+      formDataToSend.append('stock', formData.stock)
+      formDataToSend.append('category_id', formData.category_id)
+      formDataToSend.append('available', formData.available)
+      
+      if (formData.image) {
+        formDataToSend.append('image', formData.image)
+      } else if (editingProduct && editingProduct.images && editingProduct.images.length > 0) {
+        formDataToSend.append('keep_existing_image', 'true')
+      }
+
+      const updatedProduct = await apiService.updateProduct(editingProduct.id, formDataToSend)
       
       setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p))
       setShowProductForm(false)
       setEditingProduct(null)
       setSuccess('Produit modifié avec succès!')
-      await loadData() // Recharger les données
+      resetForm()
+      await loadData()
     } catch (err) {
       console.error('Error updating product:', err)
       setError(err.message || 'Erreur lors de la modification du produit')
-      throw err
     } finally {
       setLoading(false)
     }
   }
 
+  const handleEditProduct = (product) => {
+    setEditingProduct(product)
+    setFormData({
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price || '',
+      unit: product.unit || '',
+      stock: product.stock || '',
+      category_id: product.category_id || product.category?.id || '',
+      available: product.available !== undefined ? product.available : true,
+      image: null
+    })
+    
+    if (product.images && product.images.length > 0) {
+      setImagePreview(product.images[0].image)
+    } else {
+      setImagePreview(null)
+    }
+    
+    setShowProductForm(true)
+  }
+
   const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
+      return
+    }
+    
     try {
       setError('')
-      await ApiService.deleteProduct(productId)
+      await apiService.deleteProduct(productId)
       setProducts(prev => prev.filter(p => p.id !== productId))
       setSuccess('Produit supprimé avec succès!')
-      await loadData() // Recharger les données
+      await loadData()
     } catch (err) {
       console.error('Error deleting product:', err)
       setError(err.message || 'Erreur lors de la suppression du produit')
     }
   }
 
-  const handleUpdateOrderStatus = async (orderId, newStatus) => {
-    try {
-      setError('')
-      const updatedOrder = await ApiService.updateOrderStatus(orderId, newStatus)
-      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrder : o))
-      setSuccess('Statut de commande mis à jour!')
-      await loadData() // Recharger les données
-    } catch (err) {
-      console.error('Error updating order status:', err)
-      setError(err.message || 'Erreur lors de la mise à jour du statut')
-    }
-  }
-
   const handleCancelForm = () => {
     setShowProductForm(false)
     setEditingProduct(null)
+    resetForm()
   }
 
-  // Calcul des statistiques en temps réel
   const calculateStats = () => {
     const currentMonth = new Date().getMonth()
     const currentYear = new Date().getFullYear()
@@ -215,50 +339,235 @@ const FarmerDashboard = () => {
     ]
   }
 
-  // Préparer les données pour les graphiques
-  const getAnalyticsData = () => {
-    // Grouper les ventes par mois
-    const salesByMonth = {}
-    orders.forEach(order => {
-      if (order.created_at) {
-        const date = new Date(order.created_at)
-        const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`
-        salesByMonth[monthYear] = (salesByMonth[monthYear] || 0) + (parseFloat(order.total_amount) || 0)
-      }
-    })
-
-    // Produits les plus vendus
-    const productSales = {}
-    orders.forEach(order => {
-      if (order.items && Array.isArray(order.items)) {
-        order.items.forEach(item => {
-          if (item.product_name) {
-            productSales[item.product_name] = (productSales[item.product_name] || 0) + (item.quantity || 0)
-          }
-        })
-      }
-    })
-
-    return {
-      monthlySales: Object.entries(salesByMonth).map(([month, amount]) => ({
-        month,
-        amount
-      })),
-      topProducts: Object.entries(productSales)
-        .map(([name, quantity]) => ({ name, quantity }))
-        .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 5),
-      categoriesStats: categories.map(cat => ({
-        name: cat.name,
-        count: products.filter(p => p.category_id === cat.id).length
-      }))
-    }
-  }
-
   const handleCloseSnackbar = () => {
     setSuccess('')
     setError('')
   }
+
+  // Composant de formulaire intégré - CORRIGÉ avec Grid standard
+  const ProductFormComponent = () => (
+    <Paper sx={{ p: 3, mb: 3 }}>
+      <Typography variant="h5" gutterBottom>
+        {editingProduct ? 'Modifier le Produit' : 'Ajouter un Nouveau Produit'}
+      </Typography>
+      
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <TextField
+          label="Nom du produit *"
+          name="name"
+          value={formData.name}
+          onChange={handleInputChange}
+          fullWidth
+          disabled={loading}
+        />
+        
+        <TextField
+          label="Description *"
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          multiline
+          rows={3}
+          fullWidth
+          disabled={loading}
+        />
+        
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              label="Prix *"
+              name="price"
+              type="number"
+              value={formData.price}
+              onChange={handleInputChange}
+              fullWidth
+              disabled={loading}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth disabled={loading}>
+              <InputLabel>Unité *</InputLabel>
+              <Select
+                name="unit"
+                value={formData.unit}
+                onChange={handleInputChange}
+                label="Unité *"
+              >
+                <MenuItem value="kg">Kilogramme</MenuItem>
+                <MenuItem value="piece">Pièce</MenuItem>
+                <MenuItem value="sac">Sac</MenuItem>
+                <MenuItem value="litre">Litre</MenuItem>
+                <MenuItem value="botte">Botte</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={4}>
+            <TextField
+              label="Stock *"
+              name="stock"
+              type="number"
+              value={formData.stock}
+              onChange={handleInputChange}
+              fullWidth
+              disabled={loading}
+            />
+          </Grid>
+        </Grid>
+        
+        <FormControl fullWidth disabled={loading}>
+          <InputLabel>Catégorie *</InputLabel>
+          <Select
+            name="category_id"
+            value={formData.category_id}
+            onChange={handleInputChange}
+            label="Catégorie *"
+          >
+            <MenuItem value="">
+              <em>Sélectionner une catégorie</em>
+            </MenuItem>
+            {categories.map((category) => (
+              <MenuItem key={category.id} value={category.id}>
+                {category.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        
+        <Box>
+          <Typography variant="subtitle2" gutterBottom>
+            Image du produit
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<CloudUpload />}
+              disabled={loading}
+            >
+              Télécharger
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+            </Button>
+            
+            {imagePreview && (
+              <Box sx={{ position: 'relative' }}>
+                <CardMedia
+                  component="img"
+                  sx={{ width: 100, height: 100, borderRadius: 1, objectFit: 'cover' }}
+                  image={imagePreview}
+                  alt="Preview"
+                  onError={(e) => {
+                    e.target.src = '/placeholder-product.jpg'
+                  }}
+                />
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setImagePreview(null)
+                    setFormData({ ...formData, image: null })
+                  }}
+                  sx={{ position: 'absolute', top: -8, right: -8, bgcolor: 'white' }}
+                >
+                  <Clear />
+                </IconButton>
+              </Box>
+            )}
+            
+            <Typography variant="caption" color="text.secondary">
+              {formData.image ? formData.image.name : editingProduct && editingProduct.images && editingProduct.images.length > 0 ? 'Image existante' : 'Aucune image'}
+            </Typography>
+          </Box>
+        </Box>
+        
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+          <Button
+            variant="outlined"
+            onClick={handleCancelForm}
+            disabled={loading}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={editingProduct ? handleUpdateProduct : handleAddProduct}
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : null}
+          >
+            {loading ? 'Enregistrement...' : editingProduct ? 'Mettre à jour' : 'Créer'}
+          </Button>
+        </Box>
+      </Box>
+    </Paper>
+  )
+
+  // Composant de liste de produits - CORRIGÉ avec Grid standard
+  const ProductListComponent = () => (
+    <Grid container spacing={3}>
+      {products.map((product) => (
+        <Grid item xs={12} sm={6} md={4} key={product.id}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardMedia
+              component="img"
+              height="140"
+              image={getProductImage(product)}
+              alt={product.name}
+              sx={{ objectFit: 'cover' }}
+              onError={(e) => {
+                e.target.src = '/placeholder-product.jpg'
+              }}
+            />
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom>
+                {product.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, height: 60, overflow: 'hidden' }}>
+                {product.description?.substring(0, 100)}...
+              </Typography>
+              
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Catégorie: {getCategoryName(product)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Stock: {product.stock} {product.unit}
+                </Typography>
+              </Box>
+              
+              <Typography variant="h6" color="primary">
+                {parseFloat(product.price).toLocaleString('fr-FR')} FCFA / {product.unit}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Edit />}
+                  onClick={() => handleEditProduct(product)}
+                >
+                  Modifier
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Delete />}
+                  onClick={() => handleDeleteProduct(product.id)}
+                >
+                  Supprimer
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+  )
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -266,12 +575,11 @@ const FarmerDashboard = () => {
         <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
           Tableau de Bord Agriculteur
         </Typography>
-        <Typography variant="body1" color="textSecondary">
+        <Typography variant="body1" color="text.secondary">
           Bienvenue, {user?.first_name || 'Agriculteur'} ! Gérez vos produits et suivez vos ventes.
         </Typography>
       </Box>
 
-      {/* Notifications */}
       <Snackbar 
         open={!!error} 
         autoHideDuration={6000} 
@@ -294,7 +602,7 @@ const FarmerDashboard = () => {
         </Alert>
       </Snackbar>
 
-      {/* Statistiques */}
+      {/* Statistiques - CORRIGÉ avec Grid standard */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {calculateStats().map((stat, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
@@ -313,7 +621,6 @@ const FarmerDashboard = () => {
         </Box>
 
         <Box sx={{ p: 3 }}>
-          {/* Onglet Mes Produits */}
           {activeTab === 0 && (
             <Box>
               <Box sx={{ 
@@ -338,28 +645,21 @@ const FarmerDashboard = () => {
               </Box>
 
               {showProductForm ? (
-                <ProductForm 
-                  onSubmit={editingProduct ? handleUpdateProduct : handleAddProduct}
-                  initialData={editingProduct}
-                  onCancel={handleCancelForm}
-                  loading={loading}
-                />
+                <ProductFormComponent />
               ) : loading ? (
                 <Box display="flex" justifyContent="center" py={4}>
                   <CircularProgress />
                 </Box>
+              ) : products.length === 0 ? (
+                <Alert severity="info">
+                  Vous n'avez pas encore de produits. Cliquez sur "Ajouter un Produit" pour commencer.
+                </Alert>
               ) : (
-                <ProductList
-                  products={products}
-                  onEdit={handleEditProduct}
-                  onDelete={handleDeleteProduct}
-                  loading={false}
-                />
+                <ProductListComponent />
               )}
             </Box>
           )}
 
-          {/* Onglet Commandes */}
           {activeTab === 1 && (
             <Box>
               <Box sx={{ 
@@ -384,7 +684,7 @@ const FarmerDashboard = () => {
                     <Typography variant="h6" gutterBottom>
                       Aucune commande pour le moment
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Vos commandes apparaîtront ici lorsqu'un client achètera vos produits
                     </Typography>
                   </CardContent>
@@ -392,131 +692,21 @@ const FarmerDashboard = () => {
               ) : (
                 <OrderList
                   orders={orders}
-                  onUpdateStatus={handleUpdateOrderStatus}
+                  onUpdateStatus={apiService.updateOrderStatus}
                   loading={loading}
                 />
               )}
             </Box>
           )}
 
-          {/* Onglet Analytiques */}
           {activeTab === 2 && (
             <Box>
               <Typography variant="h5" gutterBottom>
                 Analytiques
               </Typography>
-              <Grid container spacing={3}>
-                {/* Ventes mensuelles */}
-                <Grid item xs={12} md={8}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Ventes Mensuelles
-                      </Typography>
-                      {getAnalyticsData().monthlySales.length > 0 ? (
-                        <Box>
-                          {getAnalyticsData().monthlySales.map((sale, index) => (
-                            <Box 
-                              key={index} 
-                              sx={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center',
-                                mb: 1,
-                                p: 1,
-                                backgroundColor: 'grey.50',
-                                borderRadius: 1
-                              }}
-                            >
-                              <Typography variant="body2">{sale.month}</Typography>
-                              <Typography variant="body1" fontWeight="bold">
-                                {sale.amount.toLocaleString('fr-FR')} FCFA
-                              </Typography>
-                            </Box>
-                          ))}
-                        </Box>
-                      ) : (
-                        <Box sx={{ textAlign: 'center', py: 4 }}>
-                          <Typography variant="body2" color="textSecondary">
-                            Aucune vente enregistrée
-                          </Typography>
-                        </Box>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                {/* Produits populaires */}
-                <Grid item xs={12} md={4}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Produits Populaires
-                      </Typography>
-                      <Box sx={{ mt: 2 }}>
-                        {getAnalyticsData().topProducts.length > 0 ? (
-                          getAnalyticsData().topProducts.map((product, index) => (
-                            <Box 
-                              key={index} 
-                              sx={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center',
-                                py: 1,
-                                borderBottom: index < 4 ? '1px solid' : 'none',
-                                borderColor: 'divider'
-                              }}
-                            >
-                              <Typography variant="body2">
-                                {index + 1}. {product.name}
-                              </Typography>
-                              <Typography variant="body2" color="textSecondary">
-                                {product.quantity} ventes
-                              </Typography>
-                            </Box>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
-                            Aucune vente enregistrée
-                          </Typography>
-                        )}
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                {/* Répartition par catégorie */}
-                <Grid item xs={12}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Répartition des Produits par Catégorie
-                      </Typography>
-                      <Grid container spacing={2}>
-                        {getAnalyticsData().categoriesStats.map((category, index) => (
-                          <Grid item xs={6} sm={4} md={3} key={index}>
-                            <Paper sx={{ p: 2, textAlign: 'center' }}>
-                              <Typography variant="h6" color="primary">
-                                {category.count}
-                              </Typography>
-                              <Typography variant="body2" noWrap>
-                                {category.name}
-                              </Typography>
-                            </Paper>
-                          </Grid>
-                        ))}
-                        {getAnalyticsData().categoriesStats.length === 0 && (
-                          <Grid item xs={12}>
-                            <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 2 }}>
-                              Aucun produit catégorisé
-                            </Typography>
-                          </Grid>
-                        )}
-                      </Grid>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
+              <Alert severity="info">
+                Cette fonctionnalité est en cours de développement.
+              </Alert>
             </Box>
           )}
         </Box>
